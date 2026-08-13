@@ -6,7 +6,7 @@ mod token;
 fn main() {
     let source = "
         int main() {
-            return 0;
+            return 12.45;
         }
     ";
 

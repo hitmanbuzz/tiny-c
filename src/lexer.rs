@@ -182,6 +182,7 @@ impl<'l> Lexer<'l> {
                     } else {
                         is_dot = true;
                     }
+                    num_token.push('.');
                     self.offset(1);
                 }
                 _ => {
