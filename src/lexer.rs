@@ -11,6 +11,7 @@ pub struct Lexer<'l> {
 enum LexerError {
     IDENT_START_WITH_NUM(String),
     NUM_HAS_MORE_DOTS(String),
+    BAD_STRING(String),
 }
 
 impl<'l> Lexer<'l> {
@@ -118,6 +119,7 @@ impl<'l> Lexer<'l> {
                     }
                 }
             }
+            '"' => self.lex_str(),
             'a'..='z' | 'A'..='Z' => self.lex_ident(),
             '0'..='9' => self.lex_num(),
             _ => {
@@ -197,15 +199,49 @@ impl<'l> Lexer<'l> {
         }
     }
 
+    fn lex_str(&mut self) {
+        let mut str_token = String::new();
+        let mut counter = 0;
+        let mut is_good = false;
+
+        while let Some(token) = self.peek(self.idx) {
+            match token {
+                '"' => {
+                    counter += 1;
+                    self.offset(1);
+                    if counter == 2 {
+                        is_good = true;
+                        break;
+                    }
+                }
+                _ => {
+                    str_token.push(token);
+                    self.offset(1);
+                }
+            }
+        }
+
+        match is_good {
+            true => self.add_token(Token::STRING(str_token)),
+            false => self.add_err(LexerError::BAD_STRING(str_token)),
+        }
+    }
+
     // actually return a character
     fn peek(&self, idx: usize) -> Option<char> {
-        return self.source.chars().nth(idx);
+        if let Some(c) = self.source.get(idx..=idx) {
+            return c.chars().next();
+        }
+        return None;
     }
 
     fn next(&mut self) -> Option<char> {
         let curr_idx = self.idx;
-        self.offset(1);
-        return self.peek(curr_idx);
+        let curr = self.peek(curr_idx);
+        if curr.is_some() {
+            self.offset(1);
+        }
+        return curr;
     }
 
     fn offset(&mut self, offset_value: usize) {
