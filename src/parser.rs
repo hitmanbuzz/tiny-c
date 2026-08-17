@@ -122,7 +122,7 @@ impl Parser {
         if !matches!(self.peek(), Token::IDENTIFIER(_)) {
             return Err(format!(
                 "expected `IDENTIFIER` on parse_stmt but found {:?}",
-                self.peek_prev()
+                self.peek()
             ));
         }
 
@@ -143,30 +143,40 @@ impl Parser {
                 Keyword::RETURN => {
                     let return_stmt = self.parse_return_stmt();
 
-                    if self.next() != Token::RIGHT_CURLY_BR {
-                        return Err(format!(
-                            "expected `RIGHT_CURLY_BR` but found: {:?}",
-                            self.peek()
-                        ));
-                    }
+                    match return_stmt {
+                        Ok(stmt) => {
+                            if self.next() != Token::RIGHT_CURLY_BR {
+                                return Err(format!(
+                                    "expected `RIGHT_CURLY_BR` but found: {:?}",
+                                    self.peek_prev()
+                                ));
+                            }
 
-                    return return_stmt;
+                            return Ok(stmt);
+                        }
+                        Err(err) => return Err(err),
+                    }
                 }
             },
         }
     }
 
     fn parse_return_stmt(&mut self) -> Result<Stmt, String> {
-        let expr = self.parse_expr()?;
+        let expr = self.parse_expr();
 
-        if self.next() != Token::SEMI_COLON {
-            return Err(format!(
-                "expected `SEMI_COLON` but found: {:?}",
-                self.peek()
-            ));
+        match expr {
+            Ok(e) => {
+                if self.next() != Token::SEMI_COLON {
+                    return Err(format!(
+                        "expected `SEMI_COLON` but found: {:?}",
+                        self.peek_prev()
+                    ));
+                }
+
+                Ok(Stmt::RETURN(e))
+            }
+            Err(err) => return Err(err),
         }
-
-        Ok(Stmt::RETURN(expr))
     }
 
     fn parse_expr(&mut self) -> Result<Expr, String> {

@@ -23,13 +23,16 @@ impl LexerError {
     fn print(&self) {
         match self {
             LexerError::IDENT_START_WITH_NUM(token) => {
-                eprintln!("`IDENTIFIER` start with a number: `{}`", token)
+                eprintln!("[ERROR] `IDENTIFIER` start with a number: `{}`", token)
             }
             LexerError::NUM_HAS_MORE_DOTS(token) => {
-                eprintln!("`NUMBER` contains more than 1 dot: `{}`", token)
+                eprintln!("[ERROR] `NUMBER` contains more than 1 dot: `{}`", token)
             }
             LexerError::BAD_STRING(token) => {
-                eprintln!("`IDENTIFIER` cannot start with a number: `{}`", token)
+                eprintln!(
+                    "[ERROR] `IDENTIFIER` cannot start with a number: `{}`",
+                    token
+                )
             }
         }
     }
