@@ -2,10 +2,11 @@ use std::fmt::Display;
 
 use crate::types::DataType;
 
-pub struct Program {
+pub struct Ast {
     pub f: Option<FunctionDef>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Stmt {
     RETURN(Expr),
@@ -17,6 +18,7 @@ pub enum Expr {
     INT32(i32),
 }
 
+#[allow(dead_code)]
 pub struct FunctionDef {
     pub name: String,
     pub params: Vec<Param>,
@@ -24,6 +26,7 @@ pub struct FunctionDef {
     pub return_type: DataType,
 }
 
+#[allow(dead_code)]
 pub struct Param {
     pub name: String,
     pub p_type: DataType,

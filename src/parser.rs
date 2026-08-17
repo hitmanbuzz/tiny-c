@@ -1,28 +1,38 @@
 use crate::{
-    ast::{Block, Expr, FunctionDef, Program, Stmt},
+    ast::{Ast, Block, Expr, FunctionDef, Stmt},
     token::Token,
     types::{DataType, IDENTIFIERS, IdentType, Keyword},
 };
 
 pub struct Parser {
+    pub ast: Ast,
+    pub err_msg: String,
     tokens: Vec<Token>,
     idx: usize,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, idx: 0 }
+        Self {
+            tokens,
+            idx: 0,
+            err_msg: String::new(),
+            ast: Ast { f: None },
+        }
     }
 
-    pub fn parse(&mut self) -> Result<Program, String> {
-        let f = self.parse_func_def()?;
-        Ok(Program { f: Some(f) })
+    pub fn parse(&mut self) {
+        if let Ok(f) = self.parse_func_def() {
+            self.ast = Ast { f: Some(f) };
+        } else if let Err(err_msg) = self.parse_func_def() {
+            self.err_msg = err_msg;
+        }
     }
 
     fn parse_func_def(&mut self) -> Result<FunctionDef, String> {
         if !matches!(self.peek(), Token::IDENTIFIER(_)) {
             return Err(format!(
-                "expected `IDENTIFIER but found: {:?}`",
+                "expected `IDENTIFIER` but found: {:?}`",
                 self.peek_prev(),
             ));
         }

@@ -1,16 +1,10 @@
-use crate::token::Token;
+use crate::{error::LexerError, token::Token};
 
 pub struct Lexer<'l> {
     pub tokens: Vec<Token>,
     pub errors: Vec<LexerError>,
     source: &'l str,
     idx: usize,
-}
-
-pub enum LexerError {
-    IDENT_START_WITH_NUM(String),
-    NUM_HAS_MORE_DOTS(String),
-    BAD_STRING(String),
 }
 
 impl<'l> Lexer<'l> {
@@ -275,7 +269,7 @@ mod tests {
 
         assert!(
             lexer.tokens.len() > 0,
-            "should have 9 tokens but got 0 instead"
+            "should have 10 tokens but got 0 instead"
         );
 
         let good_tokens: Vec<Token> = vec![
@@ -288,7 +282,14 @@ mod tests {
             Token::NUMBER("0".to_string()),
             Token::SEMI_COLON,
             Token::RIGHT_CURLY_BR,
+            Token::EOF,
         ];
+
+        assert_eq!(
+            lexer.tokens.len(),
+            good_tokens.len(),
+            "should have same 10 tokens"
+        );
 
         for i in 0..lexer.tokens.len() {
             assert_eq!(lexer.tokens[i], good_tokens[i]);
