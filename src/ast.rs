@@ -6,13 +6,12 @@ pub struct Program {
     pub f: Option<FunctionDef>,
 }
 
-#[allow(non_camel_case_types)]
+#[derive(Debug)]
 pub enum Stmt {
     RETURN(Expr),
     VARIABLE(DataType, String, Expr),
 }
 
-#[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub enum Expr {
     INT32(i32),

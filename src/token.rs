@@ -1,4 +1,3 @@
-#[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     PLUS,                 // use for add operation (+)

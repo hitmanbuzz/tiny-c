@@ -1,6 +1,5 @@
 use std::{collections::HashMap, sync::LazyLock};
 
-#[allow(non_camel_case_types)]
 #[derive(Debug, Clone, Copy)]
 pub enum IdentType {
     DATA_TYPE(DataType),

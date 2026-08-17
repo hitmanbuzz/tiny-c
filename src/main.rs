@@ -1,3 +1,5 @@
+#![allow(nonstandard_style)]
+
 mod ast;
 mod lexer;
 mod parser;

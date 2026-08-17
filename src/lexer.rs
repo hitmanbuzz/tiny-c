@@ -7,7 +7,6 @@ pub struct Lexer<'l> {
     idx: usize,
 }
 
-#[allow(non_camel_case_types)]
 pub enum LexerError {
     IDENT_START_WITH_NUM(String),
     NUM_HAS_MORE_DOTS(String),
