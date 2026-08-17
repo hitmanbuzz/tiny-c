@@ -101,7 +101,6 @@ impl Parser {
                 }
             }
             IdentType::KEYWORD(keyword) => {
-                println!("3");
                 Err(format!("expected `IDENTIFIER` but found: `{:?}`", keyword))
             }
         }
