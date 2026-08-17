@@ -3,12 +3,12 @@ use crate::token::Token;
 pub struct Lexer<'l> {
     pub tokens: Vec<Token>,
     pub errors: Vec<LexerError>,
-    pub source: &'l str,
-    pub idx: usize,
+    source: &'l str,
+    idx: usize,
 }
 
 #[allow(non_camel_case_types)]
-enum LexerError {
+pub enum LexerError {
     IDENT_START_WITH_NUM(String),
     NUM_HAS_MORE_DOTS(String),
     BAD_STRING(String),
@@ -28,6 +28,7 @@ impl<'l> Lexer<'l> {
         while let Some(token) = self.peek(self.idx) {
             self.match_token(token);
         }
+        self.add_token(Token::EOF);
     }
 
     fn match_token(&mut self, token: char) {
@@ -235,6 +236,8 @@ impl<'l> Lexer<'l> {
         return None;
     }
 
+    // idk whether to use this or not
+    #[allow(dead_code)]
     fn next(&mut self) -> Option<char> {
         let curr_idx = self.idx;
         let curr = self.peek(curr_idx);

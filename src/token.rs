@@ -1,5 +1,5 @@
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     PLUS,                 // use for add operation (+)
     MINUS,                // use for subtract operation (-)
@@ -26,4 +26,15 @@ pub enum Token {
     IDENTIFIER(String), // variables, functions
 
     INVALID(char), // store invalid token
+
+    EOF,
+}
+
+impl Token {
+    pub fn ident_name(self) -> String {
+        match self {
+            Token::IDENTIFIER(name) => name,
+            _ => panic!("expected identifier"),
+        }
+    }
 }

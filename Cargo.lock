@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "basic_c_compiler"
+name = "tiny_c"
 version = "0.1.0"
