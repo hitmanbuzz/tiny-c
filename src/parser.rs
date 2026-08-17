@@ -22,18 +22,17 @@ impl Parser {
     }
 
     pub fn parse(&mut self) {
-        if let Ok(f) = self.parse_func_def() {
-            self.ast = Ast { f: Some(f) };
-        } else if let Err(err_msg) = self.parse_func_def() {
-            self.err_msg = err_msg;
+        match self.parse_func_def() {
+            Ok(f) => self.ast = Ast { f: Some(f) },
+            Err(err) => self.err_msg = err,
         }
     }
 
     fn parse_func_def(&mut self) -> Result<FunctionDef, String> {
         if !matches!(self.peek(), Token::IDENTIFIER(_)) {
             return Err(format!(
-                "expected `IDENTIFIER` but found: {:?}`",
-                self.peek_prev(),
+                "expected `IDENTIFIER` for `func_return_type` but found: `{:?}`",
+                self.peek()
             ));
         }
 
@@ -96,12 +95,13 @@ impl Parser {
                     });
                 } else {
                     return Err(format!(
-                        "expected `IDENTIFIER` but found: `{:?}`",
+                        "expected `IDENTIFIER` for `func_name` but found: `{:?}`",
                         self.peek_prev()
                     ));
                 }
             }
             IdentType::KEYWORD(keyword) => {
+                println!("3");
                 Err(format!("expected `IDENTIFIER` but found: `{:?}`", keyword))
             }
         }
@@ -121,7 +121,7 @@ impl Parser {
     fn parse_stmt(&mut self) -> Result<Stmt, String> {
         if !matches!(self.peek(), Token::IDENTIFIER(_)) {
             return Err(format!(
-                "expected `IDENTIFIER` but found {:?}",
+                "expected `IDENTIFIER` on parse_stmt but found {:?}",
                 self.peek_prev()
             ));
         }

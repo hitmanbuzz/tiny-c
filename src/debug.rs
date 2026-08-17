@@ -1,5 +1,12 @@
 use crate::Stmt;
+use crate::lexer::Lexer;
 use crate::parser::Parser;
+
+impl<'l> Lexer<'l> {
+    pub fn print(&self) {
+        println!("{:#?}\n", self.tokens);
+    }
+}
 
 impl Parser {
     pub fn print(&self) {
