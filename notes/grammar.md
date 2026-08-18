@@ -3,21 +3,21 @@
 
 <br>
 
-$$
+```math
+\begin{aligned}
+\text{program} &\rightarrow \textit{function} \mid \textit{variable} \\[1em]
 
-\text{program} \rightarrow \textit{function} \space | \space \textit{variable} \\[1em]
+\text{function} &\rightarrow \textit{data\_type} + \textit{name} + \textit{block} \\
+\text{var\_decl} &\rightarrow \textit{data\_type} + \textit{name} + \textit{expr} \\
+\text{return\_stmt} &\rightarrow \text{return} + \textit{expr} \\
+\text{expr\_stmt} &\rightarrow \textit{expr} \\[1em]
 
-\text{function} \rightarrow \textit{data\_type} \space + \textit{name} \space + \textit{block} \\
-\text{var\_decl} \rightarrow \textit{data\_type} \space + \textit{name} + \space \textit{expr} \\
-\text{return\_stmt} \rightarrow \text{return} + \space \textit{expr} \\
-\text{expr\_stmt} \rightarrow \textit{expr} \\[1em]
+\text{data\_type} &\rightarrow \textit{int} \mid \textit{void} \\
+\text{name} &\rightarrow \text{a..z} \mid \text{A..Z} + \text{\_} + \text{0..9} + \cdots \\
+\cdots &\rightarrow \text{repeat} \\[1em]
 
-\text{data\_type} \rightarrow \textit{int} \space | \space \textit{void} \\
-\text{name} \rightarrow \text{a..z} \space | \space \text{A..Z} + \space \text{\_} + \space \text{0..9} + \space \text{...\space *} \\
-\text{*} \rightarrow \text{repeat} \\[1em]
-
-\text{block} \rightarrow \text{[\space \textit{stmt} \space]} \\
-\text{stmt} \rightarrow \textit{var\_decl} \space | \space \textit{expr\_stmt} \space | \space \textit{return\_stmt} \\
-\text{expr} \rightarrow \textit{int\_literal}
-
-$$
+\text{block} &\rightarrow [\textit{stmt}] \\
+\text{stmt} &\rightarrow \textit{var\_decl} \mid \textit{expr\_stmt} \mid \textit{return\_stmt} \\
+\text{expr} &\rightarrow \textit{int\_literal}
+\end{aligned}
+```
