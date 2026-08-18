@@ -1,12 +1,12 @@
 use crate::{
-    ast::{Ast, Block, Expr, FunctionDef, Stmt},
+    ast::{Ast, Block, Expr, FunctionDef, Node, Stmt},
     token::Token,
     types::{DataType, IDENTIFIERS, IdentType, Keyword},
 };
 
+#[derive(Clone)]
 pub struct Parser {
     pub ast: Ast,
-    pub err_msg: String,
     tokens: Vec<Token>,
     idx: usize,
 }
@@ -16,111 +16,140 @@ impl Parser {
         Self {
             tokens,
             idx: 0,
-            err_msg: String::new(),
-            ast: Ast { f: None },
+            ast: Ast {
+                nodes: Vec::new(),
+                err: None,
+            },
         }
     }
 
     pub fn parse(&mut self) {
-        match self.parse_func_def() {
-            Ok(f) => self.ast = Ast { f: Some(f) },
-            Err(err) => self.err_msg = err,
+        while self.peek() != Token::Eof {
+            match self.next() {
+                Token::Identifier(ident) => {
+                    let node = self.parse_node(ident.as_str());
+                    match node {
+                        Ok(n) => self.ast.nodes.push(n),
+                        Err(err) => {
+                            self.ast.err = Some(err);
+                            return;
+                        }
+                    }
+                }
+                _ => {
+                    let err_msg = format!(
+                        "expected `IDENTIFIER` at the start of program but found: `{:?}`",
+                        self.peek_prev()
+                    );
+                    self.ast.err = Some(err_msg);
+                    return;
+                }
+            }
         }
     }
 
-    fn parse_func_def(&mut self) -> Result<FunctionDef, String> {
-        if !matches!(self.peek(), Token::IDENTIFIER(_)) {
-            return Err(format!(
-                "expected `IDENTIFIER` for `func_return_type` but found: `{:?}`",
-                self.peek()
-            ));
-        }
-
-        // we are sure this is an `IDENTIFIER`
-        let func_return_type = self.next().ident_name();
-        let ident_type = self.get_ident(func_return_type.as_str()).ok_or_else(|| {
+    fn parse_node(&mut self, ident: &str) -> Result<Node, String> {
+        let ident_type = self.get_ident(ident).ok_or_else(|| {
             format!(
-                "conversion of `IDENTIFIER ({})` to its distinct type is not implemented",
-                func_return_type
+                "conversion of `Identifier ({})` to its distinct type is not implemented",
+                ident,
             )
         })?;
 
         match *ident_type {
-            IdentType::DATA_TYPE(data_type) => {
-                if data_type != DataType::INT {
-                    return Err(format!(
-                        "expected `INT` data type but found: `{:?}`",
-                        data_type
-                    ));
+            IdentType::DataType(data_type) => self.parse_data_type(data_type),
+            IdentType::Keyword(keyword) => {
+                return Err(format!(
+                    "expected `DataType` but found: `Keyword ({:?})`",
+                    keyword
+                ));
+            }
+        }
+    }
+
+    fn parse_data_type(&mut self, data_type: DataType) -> Result<Node, String> {
+        if let Token::Identifier(name) = self.next() {
+            if self.get_ident(name.as_str()).is_some() {
+                return Err(format!(
+                    "expected `Identifier (name)` but found: {:?}",
+                    self.peek_prev(),
+                ));
+            }
+
+            match self.next() {
+                Token::LeftParen => {
+                    if self.next() != Token::RightParen {
+                        return Err(format!(
+                            "expected `RightParen` but found: {:?}",
+                            self.peek_prev(),
+                        ));
+                    }
+
+                    if self.next() != Token::LeftCurlyBr {
+                        return Err(format!(
+                            "expected `LeftCurlyBr` but found: {:?}",
+                            self.peek_prev(),
+                        ));
+                    }
+
+                    let func = self.parse_func_body(data_type, name.as_str());
+                    match func {
+                        Ok(f) => Ok(Node::FuncDef(f)),
+                        Err(err) => Err(err),
+                    }
                 }
-
-                if let Token::IDENTIFIER(func_name) = self.next() {
-                    match self.next() {
-                        Token::LEFT_PAREN => {}
-                        _ => {
-                            return Err(format!(
-                                "expected `LEFT_PAREN` but found: {:?}",
-                                self.peek_prev(),
-                            ));
-                        }
-                    }
-
-                    match self.next() {
-                        Token::RIGHT_PAREN => {}
-                        _ => {
-                            return Err(format!(
-                                "expected `RIGHT_PAREN` but found: {:?}",
-                                self.peek_prev(),
-                            ));
-                        }
-                    }
-
-                    match self.next() {
-                        Token::LEFT_CURLY_BR => {}
-                        _ => {
-                            return Err(format!(
-                                "expected `LEFT_CURLY_BR` but found: {:?}",
-                                self.peek_prev(),
-                            ));
-                        }
-                    }
-
-                    let body = self.parse_block()?;
-
-                    return Ok(FunctionDef {
-                        name: func_name,
-                        params: vec![],
-                        body: body,
-                        return_type: data_type,
-                    });
-                } else {
+                Token::Equal => {
+                    todo!("variable statement")
+                }
+                _ => {
                     return Err(format!(
-                        "expected `IDENTIFIER` for `func_name` but found: `{:?}`",
-                        self.peek_prev()
+                        "invalid token after `Identifier ({})`: {:?}",
+                        name,
+                        self.peek_prev(),
                     ));
                 }
             }
-            IdentType::KEYWORD(keyword) => {
-                Err(format!("expected `IDENTIFIER` but found: `{:?}`", keyword))
+        } else {
+            return Err(format!(
+                "expected `Identifier (name)` but found: {:?}",
+                self.peek_prev(),
+            ));
+        }
+    }
+
+    fn parse_func_body(&mut self, data_type: DataType, name: &str) -> Result<FunctionDef, String> {
+        let block = self.parse_block();
+        match block {
+            Ok(b) => {
+                return Ok(FunctionDef {
+                    name: name.to_string(),
+                    params: Vec::new(),
+                    body: b,
+                    return_type: data_type,
+                });
             }
+            Err(err) => return Err(err),
         }
     }
 
     fn parse_block(&mut self) -> Result<Block, String> {
         let mut block = Block { stmts: Vec::new() };
 
-        while self.peek() != Token::EOF && self.peek() != Token::RIGHT_CURLY_BR {
-            let stmt = self.parse_stmt()?;
-            block.stmts.push(stmt);
+        while self.peek() != Token::Eof && self.peek() != Token::RightCurlyBr {
+            let stmt = self.parse_stmt();
+            match stmt {
+                Ok(s) => block.stmts.push(s),
+                Err(err) => return Err(err),
+            }
         }
 
         Ok(block)
     }
 
     fn parse_stmt(&mut self) -> Result<Stmt, String> {
-        if !matches!(self.peek(), Token::IDENTIFIER(_)) {
+        if !matches!(self.peek(), Token::Identifier(_)) {
             return Err(format!(
-                "expected `IDENTIFIER` on parse_stmt but found {:?}",
+                "expected `Identifier` on parse_stmt but found {:?}",
                 self.peek()
             ));
         }
@@ -129,24 +158,24 @@ impl Parser {
         let ident = self.next().ident_name();
         let ident_type = self.get_ident(ident.as_str()).ok_or_else(|| {
             format!(
-                "conversion of IDENTIFIER({}) to its distinct type is not implemented",
+                "conversion of `Identifier ({})` to its distinct type is not implemented",
                 ident
             )
         })?;
 
         match ident_type {
-            IdentType::DATA_TYPE(data_type) => {
+            IdentType::DataType(data_type) => {
                 todo!("data_type ({:?})", data_type)
             }
-            IdentType::KEYWORD(keyword) => match keyword {
-                Keyword::RETURN => {
+            IdentType::Keyword(keyword) => match keyword {
+                Keyword::Return => {
                     let return_stmt = self.parse_return_stmt();
 
                     match return_stmt {
                         Ok(stmt) => {
-                            if self.next() != Token::RIGHT_CURLY_BR {
+                            if self.next() != Token::RightCurlyBr {
                                 return Err(format!(
-                                    "expected `RIGHT_CURLY_BR` but found: {:?}",
+                                    "expected `RightCurlyBr` but found: {:?}",
                                     self.peek_prev()
                                 ));
                             }
@@ -165,14 +194,14 @@ impl Parser {
 
         match expr {
             Ok(e) => {
-                if self.next() != Token::SEMI_COLON {
+                if self.next() != Token::SemiColon {
                     return Err(format!(
-                        "expected `SEMI_COLON` but found: {:?}",
+                        "expected `SemiColon` but found: {:?}",
                         self.peek_prev()
                     ));
                 }
 
-                Ok(Stmt::RETURN(e))
+                Ok(Stmt::Return(e))
             }
             Err(err) => return Err(err),
         }
@@ -181,24 +210,24 @@ impl Parser {
     fn parse_expr(&mut self) -> Result<Expr, String> {
         let curr = self.next();
         match curr {
-            Token::NUMBER(num) => {
+            Token::Number(num) => {
                 let num_value = num.parse::<i32>();
                 match num_value {
-                    Ok(value) => return Ok(Expr::INT32(value)),
-                    Err(e) => return Err(e.to_string()),
+                    Ok(value) => return Ok(Expr::Int32(value)),
+                    Err(_) => return Err(format!("failed to parse `{}` to i32", num)),
                 }
             }
-            _ => Err(format!("expected `NUMBER` but found: {:?}", curr)),
+            _ => Err(format!("expected `Number` but found: {:?}", curr)),
         }
     }
 
     fn peek(&self) -> Token {
-        self.tokens.get(self.idx).unwrap_or(&Token::EOF).clone()
+        self.tokens.get(self.idx).unwrap_or(&Token::Eof).clone()
     }
 
     /// get the previous Token (`self.idx - 1`)
     fn peek_prev(&self) -> &Token {
-        self.tokens.get(self.idx - 1).unwrap_or(&Token::EOF)
+        self.tokens.get(self.idx - 1).unwrap_or(&Token::Eof)
     }
 
     fn next(&mut self) -> Token {

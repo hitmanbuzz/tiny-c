@@ -1,4 +1,7 @@
-use crate::Stmt;
+use crate::ast::{
+    Node::{FuncDef, Var},
+    Stmt,
+};
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
@@ -10,21 +13,22 @@ impl<'l> Lexer<'l> {
 
 impl Parser {
     pub fn print(&self) {
-        if !self.err_msg.is_empty() {
-            eprintln!("[ERROR] {}", self.err_msg);
-        } else {
-            if let Some(ref f) = self.ast.f {
-                println!("func_return_type ({:?})", f.return_type);
-                println!("func_name ({})", f.name);
-                for stmt in f.body.stmts.iter() {
-                    match stmt {
-                        Stmt::RETURN(expr) => println!("    func_return ({})", expr),
-                        Stmt::VARIABLE(data_type, name, expr) => {
-                            println!(
-                                "    var_type ({:?}) | var_name ({}) | var_value ({})",
-                                data_type, name, expr
-                            )
+        match &self.ast.err {
+            Some(err) => eprintln!("[ERROR] {}", err.as_str()),
+            None => {
+                for node in self.ast.nodes.iter() {
+                    match node {
+                        FuncDef(f) => {
+                            println!("func_return_type ({:?})", f.return_type);
+                            println!("func_name ({})", f.name);
+                            for stmt in f.body.stmts.iter() {
+                                match stmt {
+                                    Stmt::Return(expr) => println!("    func_return ({})", expr),
+                                    Stmt::Var(stmt) => todo!("{:?}", stmt),
+                                }
+                            }
                         }
+                        Var(v) => todo!("{:?}", v),
                     }
                 }
             }

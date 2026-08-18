@@ -8,27 +8,27 @@ pub enum LexerError {
     // identifier starting with number
     //
     // eg: 1name, 67work
-    IDENT_START_WITH_NUM(String),
+    IdentStartWithNum(String),
     // float number with more than 1 dot
     //
     // eg: 5..6, 5.6.6
-    NUM_HAS_MORE_DOTS(String),
+    NumHasDots(String),
     // string doesn't have a end quotation
     //
     // eg: "Hello World
-    BAD_STRING(String),
+    BadString(String),
 }
 
 impl LexerError {
     fn print(&self) {
         match self {
-            LexerError::IDENT_START_WITH_NUM(token) => {
+            LexerError::IdentStartWithNum(token) => {
                 eprintln!("[ERROR] `IDENTIFIER` start with a number: `{}`", token)
             }
-            LexerError::NUM_HAS_MORE_DOTS(token) => {
+            LexerError::NumHasDots(token) => {
                 eprintln!("[ERROR] `NUMBER` contains more than 1 dot: `{}`", token)
             }
-            LexerError::BAD_STRING(token) => {
+            LexerError::BadString(token) => {
                 eprintln!(
                     "[ERROR] `IDENTIFIER` cannot start with a number: `{}`",
                     token

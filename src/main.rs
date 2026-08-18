@@ -1,5 +1,3 @@
-#![allow(nonstandard_style)]
-
 mod ast;
 mod debug;
 mod error;
@@ -8,19 +6,22 @@ mod parser;
 mod token;
 mod types;
 
-use crate::{ast::Stmt, error::ErrorMsg, lexer::Lexer, parser::Parser};
+use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser};
 
 fn main() {
     let source = r#"
         int main() {
-            return 6.72323;
+            return 69;
         }
     "#;
 
     let mut lexer = Lexer::new(source);
     lexer.tokenize();
-    lexer.print_err();
-    lexer.print();
+    if !lexer.errors.is_empty() {
+        lexer.print_err();
+    } else {
+        lexer.print();
+    }
 
     let mut parser = Parser::new(lexer.tokens);
     parser.parse();

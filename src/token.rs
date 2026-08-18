@@ -1,38 +1,38 @@
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    PLUS,                 // use for add operation (+)
-    MINUS,                // use for subtract operation (-)
-    STAR,                 // use for multiplication operation (*)
-    MODULO,               // use for divide operation to get remainder (%)
-    QUESTION,             // use for ternary operator (?)
-    COLON,                // use for ternary operator (:)
-    SEMI_COLON,           // use to represent end of a statement (;)
-    DOUBLE_STAR,          // use for power operation (**)
-    BACK_SLASH,           // use for divide operation (\)
-    DOUBLE_FORWARD_SLASH, // use for comment (//)
-    EQUAL,                // use for assignment operation (=)
-    EQUAL_EQUAL,          // use for comparison operation (==)
+    Plus,               // use for add operation (+)
+    Minus,              // use for subtract operation (-)
+    Star,               // use for multiplication operation (*)
+    Modulo,             // use for divide operation to get remainder (%)
+    Question,           // use for ternary operator (?)
+    Colon,              // use for ternary operator (:)
+    SemiColon,          // use to represent end of a statement (;)
+    StarStar,           // use for power operation (**)
+    BackSlash,          // use for divide operation (\)
+    DoubleForwardSlash, // use for comment (//)
+    Equal,              // use for assignment operation (=)
+    EqualEqual,         // use for comparison operation (==)
 
-    LEFT_PAREN,     // (
-    RIGHT_PAREN,    // )
-    LEFT_CURLY_BR,  // {
-    RIGHT_CURLY_BR, // }
-    LEFT_BR,        // [
-    RIGHT_BR,       // ]
+    LeftParen,    // (
+    RightParen,   // )
+    LeftCurlyBr,  // {
+    RightCurlyBr, // }
+    LeftBr,       // [
+    RightBr,      // ]
 
-    STRING(String),     // string
-    NUMBER(String),     // int, float, double, etc
-    IDENTIFIER(String), // variables, functions
+    String(String),     // string
+    Number(String),     // int, float, double, etc
+    Identifier(String), // variables, functions
 
-    INVALID(char), // store invalid token
+    Invalid(char), // store invalid token
 
-    EOF,
+    Eof,
 }
 
 impl Token {
     pub fn ident_name(self) -> String {
         match self {
-            Token::IDENTIFIER(name) => name,
+            Token::Identifier(name) => name,
             _ => panic!("expected identifier"),
         }
     }

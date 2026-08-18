@@ -21,71 +21,71 @@ impl<'l> Lexer<'l> {
         while let Some(token) = self.peek(self.idx) {
             self.match_token(token);
         }
-        self.add_token(Token::EOF);
+        self.add_token(Token::Eof);
     }
 
     fn match_token(&mut self, token: char) {
         // i am pretty sure this is guaranteed not to fail
         match token {
             '+' => {
-                self.add_token(Token::PLUS);
+                self.add_token(Token::Plus);
                 self.offset(1);
             }
             '-' => {
-                self.add_token(Token::MINUS);
+                self.add_token(Token::Minus);
                 self.offset(1);
             }
             '\\' => {
-                self.add_token(Token::BACK_SLASH);
+                self.add_token(Token::BackSlash);
                 self.offset(1);
             }
             '%' => {
-                self.add_token(Token::MODULO);
+                self.add_token(Token::Modulo);
                 self.offset(1);
             }
             '(' => {
-                self.add_token(Token::LEFT_PAREN);
+                self.add_token(Token::LeftParen);
                 self.offset(1);
             }
             ')' => {
-                self.add_token(Token::RIGHT_PAREN);
+                self.add_token(Token::RightParen);
                 self.offset(1);
             }
             '{' => {
-                self.add_token(Token::LEFT_CURLY_BR);
+                self.add_token(Token::LeftCurlyBr);
                 self.offset(1);
             }
             '}' => {
-                self.add_token(Token::RIGHT_CURLY_BR);
+                self.add_token(Token::RightCurlyBr);
                 self.offset(1);
             }
             '[' => {
-                self.add_token(Token::LEFT_BR);
+                self.add_token(Token::LeftBr);
                 self.offset(1);
             }
             ']' => {
-                self.add_token(Token::RIGHT_BR);
+                self.add_token(Token::RightBr);
                 self.offset(1);
             }
             '?' => {
-                self.add_token(Token::QUESTION);
+                self.add_token(Token::Question);
                 self.offset(1);
             }
             ':' => {
-                self.add_token(Token::COLON);
+                self.add_token(Token::Colon);
                 self.offset(1);
             }
             ';' => {
-                self.add_token(Token::SEMI_COLON);
+                self.add_token(Token::SemiColon);
                 self.offset(1);
             }
             '*' => {
                 if let Some(next) = self.peek(self.idx + 1) {
                     if next == '*' {
-                        self.add_token(Token::DOUBLE_STAR);
+                        self.add_token(Token::StarStar);
                         self.offset(2);
                     } else {
-                        self.add_token(Token::STAR);
+                        self.add_token(Token::Star);
                         self.offset(1);
                     }
                 }
@@ -94,10 +94,10 @@ impl<'l> Lexer<'l> {
             '/' => {
                 if let Some(next) = self.peek(self.idx + 1) {
                     if next == '/' {
-                        self.add_token(Token::DOUBLE_FORWARD_SLASH);
+                        self.add_token(Token::DoubleForwardSlash);
                         self.offset(2);
                     } else {
-                        self.add_token(Token::INVALID('/'));
+                        self.add_token(Token::Invalid('/'));
                         self.offset(1);
                     }
                 }
@@ -105,10 +105,10 @@ impl<'l> Lexer<'l> {
             '=' => {
                 if let Some(next) = self.peek(self.idx + 1) {
                     if next == '=' {
-                        self.add_token(Token::EQUAL_EQUAL);
+                        self.add_token(Token::EqualEqual);
                         self.offset(2);
                     } else {
-                        self.add_token(Token::EQUAL);
+                        self.add_token(Token::Equal);
                         self.offset(1);
                     }
                 }
@@ -120,7 +120,7 @@ impl<'l> Lexer<'l> {
                 if token.is_whitespace() {
                     self.offset(1);
                 } else {
-                    self.add_token(Token::INVALID(token));
+                    self.add_token(Token::Invalid(token));
                     self.offset(1);
                 }
             }
@@ -156,8 +156,8 @@ impl<'l> Lexer<'l> {
         }
 
         match is_bad {
-            true => self.add_err(LexerError::IDENT_START_WITH_NUM(ident_token)),
-            false => self.add_token(Token::IDENTIFIER(ident_token)),
+            true => self.add_err(LexerError::IdentStartWithNum(ident_token)),
+            false => self.add_token(Token::Identifier(ident_token)),
         }
     }
 
@@ -188,8 +188,8 @@ impl<'l> Lexer<'l> {
         }
 
         match is_bad {
-            true => self.add_err(LexerError::NUM_HAS_MORE_DOTS(num_token)),
-            false => self.add_token(Token::NUMBER(num_token)),
+            true => self.add_err(LexerError::NumHasDots(num_token)),
+            false => self.add_token(Token::Number(num_token)),
         }
     }
 
@@ -216,8 +216,8 @@ impl<'l> Lexer<'l> {
         }
 
         match is_good {
-            true => self.add_token(Token::STRING(str_token)),
-            false => self.add_err(LexerError::BAD_STRING(str_token)),
+            true => self.add_token(Token::String(str_token)),
+            false => self.add_err(LexerError::BadString(str_token)),
         }
     }
 
@@ -273,16 +273,16 @@ mod tests {
         );
 
         let good_tokens: Vec<Token> = vec![
-            Token::IDENTIFIER("int".to_string()),
-            Token::IDENTIFIER("main".to_string()),
-            Token::LEFT_PAREN,
-            Token::RIGHT_PAREN,
-            Token::LEFT_CURLY_BR,
-            Token::IDENTIFIER("return".to_string()),
-            Token::NUMBER("0".to_string()),
-            Token::SEMI_COLON,
-            Token::RIGHT_CURLY_BR,
-            Token::EOF,
+            Token::Identifier("int".to_string()),
+            Token::Identifier("main".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftCurlyBr,
+            Token::Identifier("return".to_string()),
+            Token::Number("0".to_string()),
+            Token::SemiColon,
+            Token::RightCurlyBr,
+            Token::Eof,
         ];
 
         assert_eq!(
