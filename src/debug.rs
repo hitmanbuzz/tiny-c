@@ -24,7 +24,10 @@ impl Parser {
                             for stmt in f.body.stmts.iter() {
                                 match stmt {
                                     Stmt::Return(expr) => println!("    func_return ({})", expr),
-                                    Stmt::Var(stmt) => todo!("{:?}", stmt),
+                                    Stmt::Var(stmt) => println!(
+                                        "    var_type ({:?}) | var_name ({}) | var_expr ({})",
+                                        stmt.data_type, stmt.name, stmt.expr
+                                    ),
                                 }
                             }
                         }

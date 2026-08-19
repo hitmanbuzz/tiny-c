@@ -7,6 +7,7 @@ pub struct Ast {
     pub err: Option<String>,
 }
 
+#[derive(Debug)]
 pub enum Node {
     FuncDef(FunctionDef),
     Var(VarStmt),
@@ -22,9 +23,18 @@ pub enum Stmt {
 #[derive(Debug)]
 pub enum Expr {
     Int32(i32),
+    String(String),
+    Ident(ExprIdent),
+    None,
+}
+
+#[derive(Debug)]
+pub enum ExprIdent {
+    Var(String),
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct FunctionDef {
     pub name: String,
     pub params: Vec<Param>,
@@ -33,6 +43,7 @@ pub struct FunctionDef {
 }
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Param {
     pub name: String,
     pub p_type: DataType,
@@ -54,6 +65,11 @@ impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Int32(v) => write!(f, "{}", v),
+            Expr::Ident(ident) => match ident {
+                ExprIdent::Var(var) => write!(f, "{}", var.as_str()),
+            },
+            Expr::String(str) => write!(f, "{}", str.as_str()),
+            Expr::None => write!(f, "None"),
         }
     }
 }

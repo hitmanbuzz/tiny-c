@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Ast, Block, Expr, FunctionDef, Node, Stmt},
+    ast::{Ast, Block, Expr, ExprIdent, FunctionDef, Node, Stmt, VarStmt},
     token::Token,
     types::{DataType, IDENTIFIERS, IdentType, Keyword},
 };
@@ -81,24 +81,18 @@ impl Parser {
             curr = self.next();
             match curr {
                 Token::LeftParen => {
-                    curr = self.next();
-                    if curr != Token::RightParen {
-                        return Err(format!("expected `RightParen` but found: {:?}", curr));
-                    }
-
-                    curr = self.next();
-                    if curr != Token::LeftCurlyBr {
-                        return Err(format!("expected `LeftCurlyBr` but found: {:?}", curr));
-                    }
-
-                    let func = self.parse_func_body(data_type, name.as_str());
+                    let func = self.parse_func(data_type, name.as_str());
                     match func {
                         Ok(f) => Ok(Node::FuncDef(f)),
                         Err(err) => Err(err),
                     }
                 }
                 Token::Equal => {
-                    todo!("variable statement")
+                    let var = self.parse_var_stmt(data_type, name.as_str());
+                    match var {
+                        Ok(v) => Ok(Node::Var(v)),
+                        Err(err) => Err(err),
+                    }
                 }
                 _ => {
                     return Err(format!(
@@ -115,7 +109,49 @@ impl Parser {
         }
     }
 
-    fn parse_func_body(&mut self, data_type: DataType, name: &str) -> Result<FunctionDef, String> {
+    fn parse_var_stmt(&mut self, data_type: DataType, name: &str) -> Result<VarStmt, String> {
+        let expr: Expr;
+
+        match self.peek() {
+            Token::Identifier(ident) => {
+                let result = Expr::Ident(ExprIdent::Var(ident));
+                expr = result;
+            }
+            _ => {
+                let result = self.parse_expr();
+                match result {
+                    Ok(e) => expr = e,
+                    Err(err) => return Err(err),
+                }
+            }
+        }
+
+        let curr = self.next();
+        if curr != Token::SemiColon {
+            return Err(format!(
+                "expected `SemiColon` at the end of var_stmt but found: {:?}",
+                curr
+            ));
+        }
+
+        return Ok(VarStmt {
+            data_type: data_type,
+            name: name.to_string(),
+            expr: expr,
+        });
+    }
+
+    fn parse_func(&mut self, data_type: DataType, name: &str) -> Result<FunctionDef, String> {
+        let mut curr = self.next();
+        if curr != Token::RightParen {
+            return Err(format!("expected `RightParen` but found: {:?}", curr));
+        }
+
+        curr = self.next();
+        if curr != Token::LeftCurlyBr {
+            return Err(format!("expected `LeftCurlyBr` but found: {:?}", curr));
+        }
+
         let block = self.parse_block();
         match block {
             Ok(b) => {
@@ -163,7 +199,16 @@ impl Parser {
 
         match ident_type {
             IdentType::DataType(data_type) => {
-                todo!("data_type ({:?})", data_type)
+                let result = self.parse_data_type(*data_type);
+                match result {
+                    Ok(node) => match node {
+                        Node::FuncDef(f) => {
+                            return Err(format!("unexpected function within a function: {:?}", f));
+                        }
+                        Node::Var(var_stmt) => return Ok(Stmt::Var(var_stmt)),
+                    },
+                    Err(err) => return Err(err),
+                }
             }
             IdentType::Keyword(keyword) => match keyword {
                 Keyword::Return => {
@@ -214,7 +259,8 @@ impl Parser {
                     Err(_) => return Err(format!("failed to parse `{}` to i32", num)),
                 }
             }
-            _ => Err(format!("expected `Number` but found: {:?}", curr)),
+            Token::String(str) => return Ok(Expr::String(str)),
+            _ => Err(format!("expected expression but found: `{:?}`", curr)),
         }
     }
 

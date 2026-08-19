@@ -11,6 +11,8 @@ use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser};
 fn main() {
     let source = r#"
         int main() {
+            int a = 5;
+            int hello = 69;
             return 69;
         }
     "#;
