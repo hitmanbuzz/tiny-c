@@ -278,3 +278,139 @@ impl Parser {
         IDENTIFIERS.get(ident)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::lexer::Lexer;
+
+    use super::*;
+
+    #[test]
+    fn test_return_stmt() {
+        let source = "
+            int main() {
+                return 69;
+            }
+        ";
+        let mut lexer = Lexer::new(source);
+        lexer.tokenize();
+
+        assert!(
+            lexer.tokens.len() > 0,
+            "should have 10 tokens but got 0 instead"
+        );
+
+        let good_tokens: Vec<Token> = vec![
+            Token::Identifier("int".to_string()),
+            Token::Identifier("main".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftCurlyBr,
+            Token::Identifier("return".to_string()),
+            Token::Number("69".to_string()),
+            Token::SemiColon,
+            Token::RightCurlyBr,
+            Token::Eof,
+        ];
+
+        assert_eq!(
+            lexer.tokens.len(),
+            good_tokens.len(),
+            "should have same 10 tokens"
+        );
+
+        assert_eq!(lexer.errors.len(), 0);
+
+        for i in 0..lexer.tokens.len() {
+            assert_eq!(lexer.tokens[i], good_tokens[i]);
+        }
+
+        let mut parser = Parser::new(lexer.tokens);
+        parser.parse();
+
+        let good_ast = Ast {
+            nodes: vec![Node::FuncDef(FunctionDef {
+                name: String::from("main"),
+                params: vec![],
+                body: Block {
+                    stmts: vec![Stmt::Return(Expr::Int32(69))],
+                },
+                return_type: DataType::Int,
+            })],
+            err: None,
+        };
+
+        assert_eq!(parser.ast, good_ast);
+    }
+
+    #[test]
+    fn test_var_stmt() {
+        let source = "
+            int main() {
+                int a = 67;
+                return 69;
+            }
+        ";
+        let mut lexer = Lexer::new(source);
+        lexer.tokenize();
+
+        assert!(
+            lexer.tokens.len() > 0,
+            "should have 10 tokens but got 0 instead"
+        );
+
+        let good_tokens: Vec<Token> = vec![
+            Token::Identifier("int".to_string()),
+            Token::Identifier("main".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftCurlyBr,
+            Token::Identifier("int".to_string()),
+            Token::Identifier("a".to_string()),
+            Token::Equal,
+            Token::Number("67".to_string()),
+            Token::SemiColon,
+            Token::Identifier("return".to_string()),
+            Token::Number("69".to_string()),
+            Token::SemiColon,
+            Token::RightCurlyBr,
+            Token::Eof,
+        ];
+
+        assert_eq!(
+            lexer.tokens.len(),
+            good_tokens.len(),
+            "should have same 15 tokens"
+        );
+
+        assert_eq!(lexer.errors.len(), 0);
+
+        for i in 0..lexer.tokens.len() {
+            assert_eq!(lexer.tokens[i], good_tokens[i]);
+        }
+
+        let mut parser = Parser::new(lexer.tokens);
+        parser.parse();
+
+        let good_ast = Ast {
+            nodes: vec![Node::FuncDef(FunctionDef {
+                name: String::from("main"),
+                params: vec![],
+                body: Block {
+                    stmts: vec![
+                        Stmt::Var(VarStmt {
+                            data_type: DataType::Int,
+                            name: String::from("a"),
+                            expr: Expr::Int32(67),
+                        }),
+                        Stmt::Return(Expr::Int32(69)),
+                    ],
+                },
+                return_type: DataType::Int,
+            })],
+            err: None,
+        };
+
+        assert_eq!(parser.ast, good_ast);
+    }
+}

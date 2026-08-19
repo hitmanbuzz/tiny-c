@@ -2,25 +2,26 @@ use std::fmt::Display;
 
 use crate::types::DataType;
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Ast {
     pub nodes: Vec<Node>,
     pub err: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Node {
     FuncDef(FunctionDef),
     Var(VarStmt),
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Stmt {
     Return(Expr),
     Var(VarStmt),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Expr {
     Int32(i32),
     String(String),
@@ -28,13 +29,13 @@ pub enum Expr {
     None,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ExprIdent {
     Var(String),
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FunctionDef {
     pub name: String,
     pub params: Vec<Param>,
@@ -43,18 +44,18 @@ pub struct FunctionDef {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
     pub p_type: DataType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct VarStmt {
     pub data_type: DataType,
     pub name: String,

@@ -6,7 +6,7 @@ pub enum IdentType {
     Keyword(Keyword),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataType {
     Int,
     CharPtr,
