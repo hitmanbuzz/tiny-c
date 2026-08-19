@@ -4,7 +4,6 @@ use crate::{
     types::{DataType, IDENTIFIERS, IdentType, Keyword},
 };
 
-#[derive(Clone)]
 pub struct Parser {
     pub ast: Ast,
     tokens: Vec<Token>,
@@ -25,7 +24,8 @@ impl Parser {
 
     pub fn parse(&mut self) {
         while self.peek() != Token::Eof {
-            match self.next() {
+            let curr = self.next();
+            match curr {
                 Token::Identifier(ident) => {
                     let node = self.parse_node(ident.as_str());
                     match node {
@@ -39,7 +39,7 @@ impl Parser {
                 _ => {
                     let err_msg = format!(
                         "expected `IDENTIFIER` at the start of program but found: `{:?}`",
-                        self.peek_prev()
+                        curr
                     );
                     self.ast.err = Some(err_msg);
                     return;
@@ -68,28 +68,27 @@ impl Parser {
     }
 
     fn parse_data_type(&mut self, data_type: DataType) -> Result<Node, String> {
-        if let Token::Identifier(name) = self.next() {
+        let mut curr = self.next();
+
+        if let Token::Identifier(name) = curr {
             if self.get_ident(name.as_str()).is_some() {
                 return Err(format!(
-                    "expected `Identifier (name)` but found: {:?}",
-                    self.peek_prev(),
+                    "conversion of `Identifier ({})` to its distinct type is not implemented",
+                    name,
                 ));
             }
 
-            match self.next() {
+            curr = self.next();
+            match curr {
                 Token::LeftParen => {
-                    if self.next() != Token::RightParen {
-                        return Err(format!(
-                            "expected `RightParen` but found: {:?}",
-                            self.peek_prev(),
-                        ));
+                    curr = self.next();
+                    if curr != Token::RightParen {
+                        return Err(format!("expected `RightParen` but found: {:?}", curr));
                     }
 
-                    if self.next() != Token::LeftCurlyBr {
-                        return Err(format!(
-                            "expected `LeftCurlyBr` but found: {:?}",
-                            self.peek_prev(),
-                        ));
+                    curr = self.next();
+                    if curr != Token::LeftCurlyBr {
+                        return Err(format!("expected `LeftCurlyBr` but found: {:?}", curr));
                     }
 
                     let func = self.parse_func_body(data_type, name.as_str());
@@ -104,15 +103,14 @@ impl Parser {
                 _ => {
                     return Err(format!(
                         "invalid token after `Identifier ({})`: {:?}",
-                        name,
-                        self.peek_prev(),
+                        name, curr
                     ));
                 }
             }
         } else {
             return Err(format!(
                 "expected `Identifier (name)` but found: {:?}",
-                self.peek_prev(),
+                curr
             ));
         }
     }
@@ -173,10 +171,11 @@ impl Parser {
 
                     match return_stmt {
                         Ok(stmt) => {
-                            if self.next() != Token::RightCurlyBr {
+                            let curr = self.next();
+                            if curr != Token::RightCurlyBr {
                                 return Err(format!(
                                     "expected `RightCurlyBr` but found: {:?}",
-                                    self.peek_prev()
+                                    curr
                                 ));
                             }
 
@@ -194,11 +193,9 @@ impl Parser {
 
         match expr {
             Ok(e) => {
-                if self.next() != Token::SemiColon {
-                    return Err(format!(
-                        "expected `SemiColon` but found: {:?}",
-                        self.peek_prev()
-                    ));
+                let curr = self.next();
+                if curr != Token::SemiColon {
+                    return Err(format!("expected `SemiColon` but found: {:?}", curr));
                 }
 
                 Ok(Stmt::Return(e))
@@ -223,11 +220,6 @@ impl Parser {
 
     fn peek(&self) -> Token {
         self.tokens.get(self.idx).unwrap_or(&Token::Eof).clone()
-    }
-
-    /// get the previous Token (`self.idx - 1`)
-    fn peek_prev(&self) -> &Token {
-        self.tokens.get(self.idx - 1).unwrap_or(&Token::Eof)
     }
 
     fn next(&mut self) -> Token {
