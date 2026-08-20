@@ -116,6 +116,7 @@ impl Parser {
             Token::Identifier(ident) => {
                 let result = Expr::Ident(ExprIdent::Var(ident));
                 expr = result;
+                self.next(); // move the current token to SemiColon
             }
             _ => {
                 let result = self.parse_expr();

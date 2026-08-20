@@ -62,15 +62,51 @@ pub struct VarStmt {
     pub expr: Expr,
 }
 
-impl Display for Expr {
+impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Int32(v) => write!(f, "{}", v),
-            Expr::Ident(ident) => match ident {
-                ExprIdent::Var(var) => write!(f, "{}", var.as_str()),
-            },
-            Expr::String(str) => write!(f, "{}", str.as_str()),
-            Expr::None => write!(f, "None"),
+            Node::FuncDef(func) => {
+                writeln!(
+                    f,
+                    "func_return_type ({:?})  func_name ({})",
+                    func.return_type, func.name
+                )?;
+                for stmt in func.body.stmts.iter() {
+                    writeln!(f, "    {}", stmt)?;
+                }
+                Ok(())
+            }
+            Node::Var(var_stmt) => write!(
+                f,
+                "var_type ({:?})  var_name ({})  =  var_expr ({:?})",
+                var_stmt.data_type, var_stmt.name, var_stmt.expr
+            ),
         }
     }
 }
+
+impl Display for Stmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Stmt::Return(expr) => write!(f, "func_return_stmt ({:?})", expr),
+            Stmt::Var(var_stmt) => write!(
+                f,
+                "var_type ({:?})  var_name ({})  =  var_expr ({:?})",
+                var_stmt.data_type, var_stmt.name, var_stmt.expr
+            ),
+        }
+    }
+}
+
+// impl Display for Expr {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Expr::Int32(v) => write!(f, "Int32({})", v),
+//             Expr::Ident(ident) => match ident {
+//                 ExprIdent::Var(var) => write!(f, "Ident({})", var.as_str()),
+//             },
+//             Expr::String(str) => write!(f, "String({})", str.as_str()),
+//             Expr::None => write!(f, "None"),
+//         }
+//     }
+// }
