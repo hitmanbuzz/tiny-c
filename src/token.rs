@@ -1,4 +1,6 @@
-#[derive(Debug, PartialEq, Clone)]
+use crate::ast::BinaryOp;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     Plus,               // use for add operation (+)
     Minus,              // use for subtract operation (-)
@@ -8,7 +10,7 @@ pub enum Token {
     Colon,              // use for ternary operator (:)
     SemiColon,          // use to represent end of a statement (;)
     StarStar,           // use for power operation (**)
-    BackSlash,          // use for divide operation (\)
+    ForwardSlash,       // use for divide operation (/)
     DoubleForwardSlash, // use for comment (//)
     Equal,              // use for assignment operation (=)
     EqualEqual,         // use for comparison operation (==)
@@ -34,6 +36,20 @@ impl Token {
         match self {
             Token::Identifier(name) => name,
             _ => panic!("expected identifier"),
+        }
+    }
+
+    // (left_binding_power, right_binding_power, BinaryOp)
+    pub fn bin_op(&self) -> Option<(f32, f32, BinaryOp)> {
+        // TODO: add other operator
+        match self {
+            Token::Plus => Some((1.0, 1.1, BinaryOp::Add)),
+            Token::Minus => Some((1.0, 1.1, BinaryOp::Sub)),
+
+            Token::Star => Some((2.0, 2.1, BinaryOp::Mul)),
+            Token::ForwardSlash => Some((2.0, 2.1, BinaryOp::Div)),
+            Token::Modulo => Some((2.0, 2.1, BinaryOp::Modulo)),
+            _ => None,
         }
     }
 }

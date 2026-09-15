@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Ast, Block, Expr, ExprIdent, FunctionDef, Node, Stmt, VarStmt},
+    ast::{Ast, BinaryExpr, Block, Expr, ExprIdent, FunctionDef, Node, Stmt, VarStmt},
     token::Token,
     types::{DataType, IDENTIFIERS, IdentType, Keyword},
 };
@@ -114,12 +114,12 @@ impl Parser {
 
         match self.peek() {
             Token::Identifier(ident) => {
-                let result = Expr::Ident(ExprIdent::Var(ident));
+                let result = Expr::Ident(ExprIdent::Ident(ident));
                 expr = result;
                 self.next(); // move the current token to SemiColon
             }
             _ => {
-                let result = self.parse_expr();
+                let result = self.parse_expr(0.0);
                 match result {
                     Ok(e) => expr = e,
                     Err(err) => return Err(err),
@@ -153,24 +153,25 @@ impl Parser {
             return Err(format!("expected `LeftCurlyBr` but found: {:?}", curr));
         }
 
-        let block = self.parse_block();
-        match block {
-            Ok(b) => {
-                return Ok(FunctionDef {
-                    name: name.to_string(),
-                    params: Vec::new(),
-                    body: b,
-                    return_type: data_type,
-                });
-            }
-            Err(err) => return Err(err),
+        let block = self.parse_block()?;
+
+        curr = self.next();
+        if curr != Token::RightCurlyBr {
+            return Err(format!("expected `RightCurlyBr` but found: {:?}", curr));
         }
+
+        return Ok(FunctionDef {
+            name: name.to_string(),
+            params: Vec::new(),
+            body: block,
+            return_type: data_type,
+        });
     }
 
     fn parse_block(&mut self) -> Result<Block, String> {
         let mut block = Block { stmts: Vec::new() };
 
-        while self.peek() != Token::Eof && self.peek() != Token::RightCurlyBr {
+        while self.peek() != Token::RightCurlyBr {
             let stmt = self.parse_stmt();
             match stmt {
                 Ok(s) => block.stmts.push(s),
@@ -204,38 +205,21 @@ impl Parser {
                 match result {
                     Ok(node) => match node {
                         Node::FuncDef(f) => {
-                            return Err(format!("unexpected function within a function: {:?}", f));
+                            Err(format!("unexpected function within a function: {:?}", f))
                         }
-                        Node::Var(var_stmt) => return Ok(Stmt::Var(var_stmt)),
+                        Node::Var(var_stmt) => Ok(Stmt::Var(var_stmt)),
                     },
-                    Err(err) => return Err(err),
+                    Err(err) => Err(err),
                 }
             }
             IdentType::Keyword(keyword) => match keyword {
-                Keyword::Return => {
-                    let return_stmt = self.parse_return_stmt();
-
-                    match return_stmt {
-                        Ok(stmt) => {
-                            let curr = self.next();
-                            if curr != Token::RightCurlyBr {
-                                return Err(format!(
-                                    "expected `RightCurlyBr` but found: {:?}",
-                                    curr
-                                ));
-                            }
-
-                            return Ok(stmt);
-                        }
-                        Err(err) => return Err(err),
-                    }
-                }
+                Keyword::Return => Ok(self.parse_return_stmt()?),
             },
         }
     }
 
     fn parse_return_stmt(&mut self) -> Result<Stmt, String> {
-        let expr = self.parse_expr();
+        let expr = self.parse_expr(0.0);
 
         match expr {
             Ok(e) => {
@@ -243,26 +227,66 @@ impl Parser {
                 if curr != Token::SemiColon {
                     return Err(format!("expected `SemiColon` but found: {:?}", curr));
                 }
-
                 Ok(Stmt::Return(e))
             }
-            Err(err) => return Err(err),
+            Err(err) => Err(err),
         }
     }
 
-    fn parse_expr(&mut self) -> Result<Expr, String> {
+    fn parse_expr(&mut self, min_bp: f32) -> Result<Expr, String> {
         let curr = self.next();
-        match curr {
+
+        let mut lhs = match curr {
             Token::Number(num) => {
-                let num_value = num.parse::<i32>();
-                match num_value {
-                    Ok(value) => return Ok(Expr::Int32(value)),
-                    Err(_) => return Err(format!("failed to parse `{}` to i32", num)),
-                }
+                let value = num
+                    .parse::<i32>()
+                    .map_err(|_| format!("failed to parse `{}` to i32", num))?;
+
+                Expr::Int32(value)
             }
-            Token::String(str) => return Ok(Expr::String(str)),
-            _ => Err(format!("expected expression but found: `{:?}`", curr)),
+
+            Token::String(str) => Expr::String(str),
+
+            Token::LeftParen => {
+                let expr = self.parse_expr(0.0)?;
+
+                if self.next() != Token::RightParen {
+                    return Err("expected `RightParen`".to_string());
+                }
+
+                expr
+            }
+
+            _ => {
+                return Err(format!("unexpected token in expression: {:?}", curr));
+            }
+        };
+
+        loop {
+            let c = self.peek();
+            match c {
+                // FIX: EOF should not break always (it can return error)
+                Token::SemiColon | Token::RightParen | Token::Eof => break,
+                Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash | Token::Modulo => {
+                    let (lbp, rbp, op) = c
+                        .bin_op()
+                        .ok_or_else(|| format!("expected `Operator` but found: {:?}", c))?;
+                    if lbp < min_bp {
+                        break;
+                    }
+                    self.next();
+                    let rhs = self.parse_expr(rbp)?;
+                    lhs = Expr::BinaryExpr(Box::new(BinaryExpr {
+                        left: lhs,
+                        op,
+                        right: rhs,
+                    }));
+                }
+                _ => return Err(format!("unexpected token in expression: {:?}", c)),
+            }
         }
+
+        return Ok(lhs);
     }
 
     fn peek(&self) -> Token {
@@ -282,7 +306,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::Lexer;
+    use crate::{ast::BinaryOp, lexer::Lexer};
 
     use super::*;
 
@@ -405,6 +429,124 @@ mod tests {
                             expr: Expr::Int32(67),
                         }),
                         Stmt::Return(Expr::Int32(69)),
+                    ],
+                },
+                return_type: DataType::Int,
+            })],
+            err: None,
+        };
+
+        assert_eq!(parser.ast, good_ast);
+    }
+
+    #[test]
+    fn test_binary_expr() {
+        let source = "
+        int main() {
+            int a = 1 * (2 + 3);
+            int b = 1 + 2 * 3 * 4 + 5 / 6 - 7;
+        }
+    ";
+
+        let mut lexer = Lexer::new(source);
+        lexer.tokenize();
+
+        let good_tokens: Vec<Token> = vec![
+            Token::Identifier("int".to_string()),
+            Token::Identifier("main".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftCurlyBr,
+            Token::Identifier("int".to_string()),
+            Token::Identifier("a".to_string()),
+            Token::Equal,
+            Token::Number("1".to_string()),
+            Token::Star,
+            Token::LeftParen,
+            Token::Number("2".to_string()),
+            Token::Plus,
+            Token::Number("3".to_string()),
+            Token::RightParen,
+            Token::SemiColon,
+            Token::Identifier("int".to_string()),
+            Token::Identifier("b".to_string()),
+            Token::Equal,
+            Token::Number("1".to_string()),
+            Token::Plus,
+            Token::Number("2".to_string()),
+            Token::Star,
+            Token::Number("3".to_string()),
+            Token::Star,
+            Token::Number("4".to_string()),
+            Token::Plus,
+            Token::Number("5".to_string()),
+            Token::ForwardSlash,
+            Token::Number("6".to_string()),
+            Token::Minus,
+            Token::Number("7".to_string()),
+            Token::SemiColon,
+            Token::RightCurlyBr,
+            Token::Eof,
+        ];
+
+        assert_eq!(lexer.tokens, good_tokens);
+        assert!(lexer.errors.is_empty());
+
+        let mut parser = Parser::new(lexer.tokens);
+        parser.parse();
+
+        let good_ast = Ast {
+            nodes: vec![Node::FuncDef(FunctionDef {
+                name: "main".to_string(),
+                params: vec![],
+                body: Block {
+                    stmts: vec![
+                        Stmt::Var(VarStmt {
+                            data_type: DataType::Int,
+                            name: "a".to_string(),
+
+                            // 1 * (2 + 3)
+                            expr: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                left: Expr::Int32(1),
+                                op: BinaryOp::Mul,
+                                right: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                    left: Expr::Int32(2),
+                                    op: BinaryOp::Add,
+                                    right: Expr::Int32(3),
+                                })),
+                            })),
+                        }),
+                        Stmt::Var(VarStmt {
+                            data_type: DataType::Int,
+                            name: "b".to_string(),
+
+                            // ((1 + ((2 * 3) * 4)) + (5 / 6)) - 7
+                            expr: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                left: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                    left: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                        left: Expr::Int32(1),
+                                        op: BinaryOp::Add,
+                                        right: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                            left: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                                left: Expr::Int32(2),
+                                                op: BinaryOp::Mul,
+                                                right: Expr::Int32(3),
+                                            })),
+                                            op: BinaryOp::Mul,
+                                            right: Expr::Int32(4),
+                                        })),
+                                    })),
+                                    op: BinaryOp::Add,
+                                    right: Expr::BinaryExpr(Box::new(BinaryExpr {
+                                        left: Expr::Int32(5),
+                                        op: BinaryOp::Div,
+                                        right: Expr::Int32(6),
+                                    })),
+                                })),
+                                op: BinaryOp::Sub,
+                                right: Expr::Int32(7),
+                            })),
+                        }),
                     ],
                 },
                 return_type: DataType::Int,

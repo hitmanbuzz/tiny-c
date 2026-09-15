@@ -26,12 +26,12 @@ pub enum Expr {
     Int32(i32),
     String(String),
     Ident(ExprIdent),
-    None,
+    BinaryExpr(Box<BinaryExpr>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExprIdent {
-    Var(String),
+    Ident(String),
 }
 
 #[allow(dead_code)]
@@ -62,6 +62,22 @@ pub struct VarStmt {
     pub expr: Expr,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Modulo,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct BinaryExpr {
+    pub left: Expr,
+    pub op: BinaryOp,
+    pub right: Expr,
+}
+
 impl Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -78,7 +94,7 @@ impl Display for Node {
             }
             Node::Var(var_stmt) => write!(
                 f,
-                "var_type ({:?})  var_name ({})  =  var_expr ({:?})",
+                "var_type ({:?})  var_name ({})  =  var_expr ({:#?})",
                 var_stmt.data_type, var_stmt.name, var_stmt.expr
             ),
         }
@@ -103,10 +119,12 @@ impl Display for Stmt {
 //         match self {
 //             Expr::Int32(v) => write!(f, "Int32({})", v),
 //             Expr::Ident(ident) => match ident {
-//                 ExprIdent::Var(var) => write!(f, "Ident({})", var.as_str()),
+//                 ExprIdent::Ident(ident) => write!(f, "Ident({})", ident),
 //             },
 //             Expr::String(str) => write!(f, "String({})", str.as_str()),
-//             Expr::None => write!(f, "None"),
+//             Expr::BinaryExpr(expr) => {
+//                 write!(f, "BinaryExpr({} {} {})", expr.left, expr.op, expr.right)
+//             }
 //         }
 //     }
 // }

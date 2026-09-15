@@ -10,12 +10,8 @@ use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser};
 
 fn main() {
     let source = r#"
-        int x = 6;
-        int y = x;
         int main() {
-            int a = 5;
-            int hello = a;
-            return 69;
+            int a = 1 * (2 + 3);
         }
     "#;
 

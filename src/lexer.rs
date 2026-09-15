@@ -35,10 +35,6 @@ impl<'l> Lexer<'l> {
                 self.add_token(Token::Minus);
                 self.offset(1);
             }
-            '\\' => {
-                self.add_token(Token::BackSlash);
-                self.offset(1);
-            }
             '%' => {
                 self.add_token(Token::Modulo);
                 self.offset(1);
@@ -97,7 +93,7 @@ impl<'l> Lexer<'l> {
                         self.add_token(Token::DoubleForwardSlash);
                         self.offset(2);
                     } else {
-                        self.add_token(Token::Invalid('/'));
+                        self.add_token(Token::ForwardSlash);
                         self.offset(1);
                     }
                 }
