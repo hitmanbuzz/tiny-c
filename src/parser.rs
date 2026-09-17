@@ -1,7 +1,7 @@
 use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
-    ast::{Ast, BinaryExpr, Block, Expr, FunctionDef, Node, Stmt, VarStmt},
+    ast::{Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, Stmt, VarStmt},
     token::Token,
     types::{DataType, IDENTIFIERS, IdentType, Keyword},
 };
@@ -15,7 +15,7 @@ impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self {
             tokens: tokens.into_iter().peekable(),
-            ast: Ast { nodes: Vec::new() },
+            ast: Ast { decls: Vec::new() },
         }
     }
 
@@ -24,13 +24,13 @@ impl Parser {
             && token != Token::Eof
         {
             match self.parse_node(token) {
-                Ok(n) => self.ast.nodes.push(n),
+                Ok(n) => self.ast.decls.push(n),
                 Err(e) => eprintln!("{}", e),
             }
         }
     }
 
-    fn parse_node(&mut self, curr: Token) -> Result<Node, String> {
+    fn parse_node(&mut self, curr: Token) -> Result<Decl, String> {
         let ident = match curr {
             Token::Identifier(str) => str,
             t => {
@@ -59,7 +59,7 @@ impl Parser {
         }
     }
 
-    fn parse_node_type(&mut self, data_type: DataType) -> Result<Node, String> {
+    fn parse_node_type(&mut self, data_type: DataType) -> Result<Decl, String> {
         let name = match self.tokens.next().unwrap_or(Token::Eof) {
             Token::Identifier(i) => i,
             t => {
@@ -71,14 +71,14 @@ impl Parser {
             Token::LeftParen => {
                 let func = self.parse_func(data_type, name.as_str());
                 match func {
-                    Ok(f) => Ok(Node::FuncDef(f)),
+                    Ok(f) => Ok(Decl::FuncDef(f)),
                     Err(err) => Err(err),
                 }
             }
             Token::Equal => {
                 let var = self.parse_var_stmt(data_type, name.as_str());
                 match var {
-                    Ok(v) => Ok(Node::Var(v)),
+                    Ok(v) => Ok(Decl::Var(v)),
                     Err(err) => Err(err),
                 }
             }
@@ -166,10 +166,10 @@ impl Parser {
             IdentType::DataType(data_type) => {
                 let node = self.parse_node_type(data_type)?;
                 match node {
-                    Node::FuncDef(f) => {
+                    Decl::FuncDef(f) => {
                         Err(format!("unexpected function within a function: {:?}", f))
                     }
-                    Node::Var(v) => Ok(Stmt::Var(v)),
+                    Decl::Var(v) => Ok(Stmt::Var(v)),
                 }
             }
             IdentType::Keyword(keyword) => match keyword {
@@ -297,7 +297,7 @@ mod tests {
         parser.parse();
 
         let good_ast = Ast {
-            nodes: vec![Node::FuncDef(FunctionDef {
+            decls: vec![Decl::FuncDef(FunctionDef {
                 name: String::from("main"),
                 params: vec![],
                 body: Block {
@@ -360,7 +360,7 @@ mod tests {
         parser.parse();
 
         let good_ast = Ast {
-            nodes: vec![Node::FuncDef(FunctionDef {
+            decls: vec![Decl::FuncDef(FunctionDef {
                 name: String::from("main"),
                 params: vec![],
                 body: Block {
@@ -437,7 +437,7 @@ mod tests {
         parser.parse();
 
         let good_ast = Ast {
-            nodes: vec![Node::FuncDef(FunctionDef {
+            decls: vec![Decl::FuncDef(FunctionDef {
                 name: "main".to_string(),
                 params: vec![],
                 body: Block {

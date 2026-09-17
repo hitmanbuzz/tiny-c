@@ -4,11 +4,11 @@ use crate::types::DataType;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ast {
-    pub nodes: Vec<Node>,
+    pub decls: Vec<Decl>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Node {
+pub enum Decl {
     FuncDef(FunctionDef),
     Var(VarStmt),
 }
@@ -72,10 +72,10 @@ pub struct BinaryExpr {
     pub right: Expr,
 }
 
-impl Display for Node {
+impl Display for Decl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Node::FuncDef(func) => {
+            Decl::FuncDef(func) => {
                 writeln!(
                     f,
                     "func_return_type ({:?})  func_name ({})",
@@ -86,7 +86,7 @@ impl Display for Node {
                 }
                 Ok(())
             }
-            Node::Var(var_stmt) => write!(
+            Decl::Var(var_stmt) => write!(
                 f,
                 "var_type ({:?})  var_name ({})  =  var_expr ({:#?})",
                 var_stmt.data_type, var_stmt.name, var_stmt.expr

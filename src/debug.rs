@@ -12,7 +12,7 @@ impl<'l> Lexer<'l> {
 impl Parser {
     pub fn print(&self) {
         println!("――――――――――――――――――――――――――――――  AST  ――――――――――――――――――――――――――――――");
-        for node in self.ast.nodes.iter() {
+        for node in self.ast.decls.iter() {
             println!("{}", node);
         }
         println!("――――――――――――――――――――――――――――――  END  ――――――――――――――――――――――――――――――\n");
