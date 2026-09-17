@@ -11,7 +11,8 @@ use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser};
 fn main() {
     let source = r#"
         int main() {
-            int a = 1 * (2 + 3);
+            int a = 1 + 2;
+            return a * 2;
         }
     "#;
 
@@ -19,6 +20,7 @@ fn main() {
     lexer.tokenize();
     if !lexer.errors.is_empty() {
         lexer.print_err();
+        return;
     } else {
         lexer.print();
     }

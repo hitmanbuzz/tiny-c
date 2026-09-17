@@ -30,7 +30,7 @@ impl LexerError {
             }
             LexerError::BadString(token) => {
                 eprintln!(
-                    "[ERROR] `IDENTIFIER` cannot start with a number: `{}`",
+                    "[ERROR] `STRING` didn't end with a closing quotation: `{}`",
                     token
                 )
             }

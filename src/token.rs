@@ -32,13 +32,6 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn ident_name(self) -> String {
-        match self {
-            Token::Identifier(name) => name,
-            _ => panic!("expected identifier"),
-        }
-    }
-
     // (left_binding_power, right_binding_power, BinaryOp)
     pub fn bin_op(&self) -> Option<(f32, f32, BinaryOp)> {
         // TODO: add other operator

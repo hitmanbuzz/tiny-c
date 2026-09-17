@@ -12,13 +12,8 @@ impl<'l> Lexer<'l> {
 impl Parser {
     pub fn print(&self) {
         println!("――――――――――――――――――――――――――――――  AST  ――――――――――――――――――――――――――――――");
-        match &self.ast.err {
-            Some(err) => eprintln!("[ERROR] {}", err.as_str()),
-            None => {
-                for node in self.ast.nodes.iter() {
-                    println!("{}", node);
-                }
-            }
+        for node in self.ast.decls.iter() {
+            println!("{}", node);
         }
         println!("――――――――――――――――――――――――――――――  END  ――――――――――――――――――――――――――――――\n");
     }

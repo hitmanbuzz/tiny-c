@@ -4,12 +4,11 @@ use crate::types::DataType;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ast {
-    pub nodes: Vec<Node>,
-    pub err: Option<String>,
+    pub decls: Vec<Decl>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Node {
+pub enum Decl {
     FuncDef(FunctionDef),
     Var(VarStmt),
 }
@@ -25,22 +24,17 @@ pub enum Stmt {
 pub enum Expr {
     Int32(i32),
     String(String),
-    Ident(ExprIdent),
-    BinaryExpr(Box<BinaryExpr>),
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ExprIdent {
     Ident(String),
+    BinaryExpr(Box<BinaryExpr>),
 }
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
 pub struct FunctionDef {
+    pub return_type: DataType,
     pub name: String,
     pub params: Vec<Param>,
     pub body: Block,
-    pub return_type: DataType,
 }
 
 #[allow(dead_code)]
@@ -78,10 +72,10 @@ pub struct BinaryExpr {
     pub right: Expr,
 }
 
-impl Display for Node {
+impl Display for Decl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Node::FuncDef(func) => {
+            Decl::FuncDef(func) => {
                 writeln!(
                     f,
                     "func_return_type ({:?})  func_name ({})",
@@ -92,7 +86,7 @@ impl Display for Node {
                 }
                 Ok(())
             }
-            Node::Var(var_stmt) => write!(
+            Decl::Var(var_stmt) => write!(
                 f,
                 "var_type ({:?})  var_name ({})  =  var_expr ({:#?})",
                 var_stmt.data_type, var_stmt.name, var_stmt.expr
