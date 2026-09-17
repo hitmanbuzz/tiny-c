@@ -5,7 +5,6 @@ use crate::types::DataType;
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ast {
     pub nodes: Vec<Node>,
-    pub err: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]

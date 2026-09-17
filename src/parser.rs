@@ -1,3 +1,5 @@
+use std::{iter::Peekable, vec::IntoIter};
+
 use crate::{
     ast::{Ast, BinaryExpr, Block, Expr, FunctionDef, Node, Stmt, VarStmt},
     token::Token,
@@ -6,50 +8,40 @@ use crate::{
 
 pub struct Parser {
     pub ast: Ast,
-    tokens: Vec<Token>,
-    idx: usize,
+    tokens: Peekable<IntoIter<Token>>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
         Self {
-            tokens,
-            idx: 0,
-            ast: Ast {
-                nodes: Vec::new(),
-                err: None,
-            },
+            tokens: tokens.into_iter().peekable(),
+            ast: Ast { nodes: Vec::new() },
         }
     }
 
     pub fn parse(&mut self) {
-        while self.peek() != Token::Eof {
-            let curr = self.next();
-            match curr {
-                Token::Identifier(ident) => {
-                    let node = self.parse_node(ident.as_str());
-                    match node {
-                        Ok(n) => self.ast.nodes.push(n),
-                        Err(err) => {
-                            self.ast.err = Some(err);
-                            return;
-                        }
-                    }
-                }
-                _ => {
-                    let err_msg = format!(
-                        "expected `IDENTIFIER` at the start of program but found: `{:?}`",
-                        curr
-                    );
-                    self.ast.err = Some(err_msg);
-                    return;
-                }
+        while let Some(token) = self.tokens.next()
+            && token != Token::Eof
+        {
+            match self.parse_node(token) {
+                Ok(n) => self.ast.nodes.push(n),
+                Err(e) => eprintln!("{}", e),
             }
         }
     }
 
-    fn parse_node(&mut self, ident: &str) -> Result<Node, String> {
-        let ident_type = self.get_ident(ident).ok_or_else(|| {
+    fn parse_node(&mut self, curr: Token) -> Result<Node, String> {
+        let ident = match curr {
+            Token::Identifier(str) => str,
+            t => {
+                return Err(format!(
+                    "expected `Identifier` at the start of program but found: {:?}",
+                    t
+                ));
+            }
+        };
+
+        let ident_type = self.get_ident(&ident).ok_or_else(|| {
             format!(
                 "conversion of `Identifier ({})` to its distinct type is not implemented",
                 ident,
@@ -68,56 +60,48 @@ impl Parser {
     }
 
     fn parse_node_type(&mut self, data_type: DataType) -> Result<Node, String> {
-        let mut curr = self.next();
+        let name = match self.tokens.next().unwrap_or(Token::Eof) {
+            Token::Identifier(i) => i,
+            t => {
+                return Err(format!("expected node name(Identifier) but found: {:?}", t));
+            }
+        };
 
-        if let Token::Identifier(name) = curr {
-            if self.get_ident(name.as_str()).is_some() {
+        match self.tokens.next().unwrap_or(Token::Eof) {
+            Token::LeftParen => {
+                let func = self.parse_func(data_type, name.as_str());
+                match func {
+                    Ok(f) => Ok(Node::FuncDef(f)),
+                    Err(err) => Err(err),
+                }
+            }
+            Token::Equal => {
+                let var = self.parse_var_stmt(data_type, name.as_str());
+                match var {
+                    Ok(v) => Ok(Node::Var(v)),
+                    Err(err) => Err(err),
+                }
+            }
+            t => {
                 return Err(format!(
-                    "conversion of `Identifier ({})` to its distinct type is not implemented",
-                    name,
+                    "invalid token after `Identifier ({})`: {:?}",
+                    name, t
                 ));
             }
-
-            curr = self.next();
-            match curr {
-                Token::LeftParen => {
-                    let func = self.parse_func(data_type, name.as_str());
-                    match func {
-                        Ok(f) => Ok(Node::FuncDef(f)),
-                        Err(err) => Err(err),
-                    }
-                }
-                Token::Equal => {
-                    let var = self.parse_var_stmt(data_type, name.as_str());
-                    match var {
-                        Ok(v) => Ok(Node::Var(v)),
-                        Err(err) => Err(err),
-                    }
-                }
-                _ => {
-                    return Err(format!(
-                        "invalid token after `Identifier ({})`: {:?}",
-                        name, curr
-                    ));
-                }
-            }
-        } else {
-            return Err(format!(
-                "expected `Identifier (name)` but found: {:?}",
-                curr
-            ));
         }
     }
 
     fn parse_var_stmt(&mut self, data_type: DataType, name: &str) -> Result<VarStmt, String> {
         let expr = self.parse_expr(0.0)?;
 
-        let curr = self.next();
-        if curr != Token::SemiColon {
-            return Err(format!(
-                "expected `SemiColon` at the end of var_stmt but found: {:?}",
-                curr
-            ));
+        match self.tokens.next().unwrap_or(Token::Eof) {
+            Token::SemiColon => {}
+            t => {
+                return Err(format!(
+                    "expected `SemiColon` at the end of var_stmt but found: {:?}",
+                    t
+                ));
+            }
         }
 
         return Ok(VarStmt {
@@ -128,22 +112,22 @@ impl Parser {
     }
 
     fn parse_func(&mut self, data_type: DataType, name: &str) -> Result<FunctionDef, String> {
-        let mut curr = self.next();
-        if curr != Token::RightParen {
-            return Err(format!("expected `RightParen` but found: {:?}", curr));
-        }
+        match self.tokens.next().unwrap_or(Token::Eof) {
+            Token::RightParen => {}
+            t => return Err(format!("expected `RightParen` but found: {:?}", t)),
+        };
 
-        curr = self.next();
-        if curr != Token::LeftCurlyBr {
-            return Err(format!("expected `LeftCurlyBr` but found: {:?}", curr));
-        }
+        match self.tokens.next().unwrap_or(Token::Eof) {
+            Token::LeftCurlyBr => {}
+            t => return Err(format!("expected `LeftCurlyBr` but found: {:?}", t)),
+        };
 
         let block = self.parse_block()?;
 
-        curr = self.next();
-        if curr != Token::RightCurlyBr {
-            return Err(format!("expected `RightCurlyBr` but found: {:?}", curr));
-        }
+        match self.tokens.next().unwrap_or(Token::Eof) {
+            Token::RightCurlyBr => {}
+            t => return Err(format!("expected `RightCurlyBr` but found: {:?}", t)),
+        };
 
         return Ok(FunctionDef {
             name: name.to_string(),
@@ -156,34 +140,31 @@ impl Parser {
     fn parse_block(&mut self) -> Result<Block, String> {
         let mut block = Block { stmts: Vec::new() };
 
-        while self.peek() != Token::RightCurlyBr {
-            let stmt = self.parse_stmt()?;
-            block.stmts.push(stmt);
+        while let Some(t) = self.tokens.peek() {
+            match t {
+                // FIX: EOF should not be a good signal (return Err)
+                Token::RightCurlyBr | Token::Eof => break,
+                _ => block.stmts.push(self.parse_stmt()?),
+            }
         }
 
         Ok(block)
     }
 
     fn parse_stmt(&mut self) -> Result<Stmt, String> {
-        if !matches!(self.peek(), Token::Identifier(_)) {
-            return Err(format!(
-                "expected `Identifier` on parse_stmt but found {:?}",
-                self.peek()
-            ));
-        }
+        let ident_type = match self.tokens.next().unwrap_or(Token::Eof) {
+            Token::Identifier(str) => self.get_ident(&str).ok_or_else(|| {
+                format!(
+                    "conversion of `Identifier ({})` to its distinct type is not implemented",
+                    str
+                )
+            })?,
+            t => return Err(format!("expected `Identifier` but found: {:?}", t)),
+        };
 
-        // we are sure this is ident
-        let ident = self.next().ident_name();
-        let ident_type = self.get_ident(ident.as_str()).ok_or_else(|| {
-            format!(
-                "conversion of `Identifier ({})` to its distinct type is not implemented",
-                ident
-            )
-        })?;
-
-        match ident_type {
+        match *ident_type {
             IdentType::DataType(data_type) => {
-                let node = self.parse_node_type(*data_type)?;
+                let node = self.parse_node_type(data_type)?;
                 match node {
                     Node::FuncDef(f) => {
                         Err(format!("unexpected function within a function: {:?}", f))
@@ -202,7 +183,7 @@ impl Parser {
 
         match expr {
             Ok(e) => {
-                let curr = self.next();
+                let curr = self.tokens.next().unwrap_or(Token::Eof);
                 if curr != Token::SemiColon {
                     return Err(format!("expected `SemiColon` but found: {:?}", curr));
                 }
@@ -213,48 +194,40 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, min_bp: f32) -> Result<Expr, String> {
-        let curr = self.next();
-
-        let mut lhs = match curr {
-            Token::Number(num) => {
-                let value = num
-                    .parse::<i32>()
-                    .map_err(|_| format!("failed to parse `{}` to i32", num))?;
-
-                Expr::Int32(value)
-            }
-
+        let mut lhs = match self.tokens.next().unwrap_or(Token::Eof) {
             Token::String(str) => Expr::String(str),
-            Token::Identifier(ident) => Expr::Ident(ident),
-
+            Token::Identifier(str) => Expr::Ident(str),
+            Token::Number(str) => {
+                let num = str
+                    .parse::<i32>()
+                    .map_err(|_| format!("failed to parse `{}` to i32", str))?;
+                Expr::Int32(num)
+            }
             Token::LeftParen => {
                 let expr = self.parse_expr(0.0)?;
-
-                if self.next() != Token::RightParen {
-                    return Err("expected `RightParen`".to_string());
+                match self.tokens.next().unwrap_or(Token::Eof) {
+                    Token::RightParen => expr,
+                    t => return Err(format!("expected `RightParen` but found: {:?}", t)),
                 }
-
-                expr
             }
-
-            _ => {
-                return Err(format!("unexpected token in expression: {:?}", curr));
-            }
+            t => return Err(format!("unexpected token in expr: {:?}", t)),
         };
 
         loop {
-            let c = self.peek();
-            match c {
+            match self.tokens.peek().unwrap_or(&Token::Eof) {
                 // FIX: EOF should not break always (it can return error)
                 Token::SemiColon | Token::RightParen | Token::Eof => break,
                 Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash | Token::Modulo => {
-                    let (lbp, rbp, op) = c
+                    let curr = self.tokens.peek().unwrap(); // this should not panic
+                    let (lbp, rbp, op) = curr
                         .bin_op()
-                        .ok_or_else(|| format!("expected `Operator` but found: {:?}", c))?;
+                        .ok_or_else(|| format!("expected `Operator` but found: {:?}", curr))?;
+
                     if lbp < min_bp {
                         break;
                     }
-                    self.next();
+
+                    self.tokens.next();
                     let rhs = self.parse_expr(rbp)?;
                     lhs = Expr::BinaryExpr(Box::new(BinaryExpr {
                         left: lhs,
@@ -262,21 +235,11 @@ impl Parser {
                         right: rhs,
                     }));
                 }
-                _ => return Err(format!("unexpected token in expression: {:?}", c)),
+                t => return Err(format!("unexpected token in expression: {:?}", t)),
             }
         }
 
         return Ok(lhs);
-    }
-
-    fn peek(&self) -> Token {
-        self.tokens.get(self.idx).unwrap_or(&Token::Eof).clone()
-    }
-
-    fn next(&mut self) -> Token {
-        let curr = self.peek().clone();
-        self.idx += 1;
-        curr
     }
 
     fn get_ident(&self, ident: &str) -> Option<&IdentType> {
@@ -342,7 +305,6 @@ mod tests {
                 },
                 return_type: DataType::Int,
             })],
-            err: None,
         };
 
         assert_eq!(parser.ast, good_ast);
@@ -413,7 +375,6 @@ mod tests {
                 },
                 return_type: DataType::Int,
             })],
-            err: None,
         };
 
         assert_eq!(parser.ast, good_ast);
@@ -531,7 +492,6 @@ mod tests {
                 },
                 return_type: DataType::Int,
             })],
-            err: None,
         };
 
         assert_eq!(parser.ast, good_ast);
