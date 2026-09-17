@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Ast, BinaryExpr, Block, Expr, ExprIdent, FunctionDef, Node, Stmt, VarStmt},
+    ast::{Ast, BinaryExpr, Block, Expr, FunctionDef, Node, Stmt, VarStmt},
     token::Token,
     types::{DataType, IDENTIFIERS, IdentType, Keyword},
 };
@@ -57,7 +57,7 @@ impl Parser {
         })?;
 
         match *ident_type {
-            IdentType::DataType(data_type) => self.parse_data_type(data_type),
+            IdentType::DataType(data_type) => self.parse_node_type(data_type),
             IdentType::Keyword(keyword) => {
                 return Err(format!(
                     "expected `DataType` but found: `Keyword ({:?})`",
@@ -67,7 +67,7 @@ impl Parser {
         }
     }
 
-    fn parse_data_type(&mut self, data_type: DataType) -> Result<Node, String> {
+    fn parse_node_type(&mut self, data_type: DataType) -> Result<Node, String> {
         let mut curr = self.next();
 
         if let Token::Identifier(name) = curr {
@@ -110,22 +110,7 @@ impl Parser {
     }
 
     fn parse_var_stmt(&mut self, data_type: DataType, name: &str) -> Result<VarStmt, String> {
-        let expr: Expr;
-
-        match self.peek() {
-            Token::Identifier(ident) => {
-                let result = Expr::Ident(ExprIdent::Ident(ident));
-                expr = result;
-                self.next(); // move the current token to SemiColon
-            }
-            _ => {
-                let result = self.parse_expr(0.0);
-                match result {
-                    Ok(e) => expr = e,
-                    Err(err) => return Err(err),
-                }
-            }
-        }
+        let expr = self.parse_expr(0.0)?;
 
         let curr = self.next();
         if curr != Token::SemiColon {
@@ -172,11 +157,8 @@ impl Parser {
         let mut block = Block { stmts: Vec::new() };
 
         while self.peek() != Token::RightCurlyBr {
-            let stmt = self.parse_stmt();
-            match stmt {
-                Ok(s) => block.stmts.push(s),
-                Err(err) => return Err(err),
-            }
+            let stmt = self.parse_stmt()?;
+            block.stmts.push(stmt);
         }
 
         Ok(block)
@@ -201,15 +183,12 @@ impl Parser {
 
         match ident_type {
             IdentType::DataType(data_type) => {
-                let result = self.parse_data_type(*data_type);
-                match result {
-                    Ok(node) => match node {
-                        Node::FuncDef(f) => {
-                            Err(format!("unexpected function within a function: {:?}", f))
-                        }
-                        Node::Var(var_stmt) => Ok(Stmt::Var(var_stmt)),
-                    },
-                    Err(err) => Err(err),
+                let node = self.parse_node_type(*data_type)?;
+                match node {
+                    Node::FuncDef(f) => {
+                        Err(format!("unexpected function within a function: {:?}", f))
+                    }
+                    Node::Var(v) => Ok(Stmt::Var(v)),
                 }
             }
             IdentType::Keyword(keyword) => match keyword {
@@ -246,6 +225,7 @@ impl Parser {
             }
 
             Token::String(str) => Expr::String(str),
+            Token::Identifier(ident) => Expr::Ident(ident),
 
             Token::LeftParen => {
                 let expr = self.parse_expr(0.0)?;

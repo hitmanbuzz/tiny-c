@@ -25,22 +25,17 @@ pub enum Stmt {
 pub enum Expr {
     Int32(i32),
     String(String),
-    Ident(ExprIdent),
-    BinaryExpr(Box<BinaryExpr>),
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ExprIdent {
     Ident(String),
+    BinaryExpr(Box<BinaryExpr>),
 }
 
 #[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq)]
 pub struct FunctionDef {
+    pub return_type: DataType,
     pub name: String,
     pub params: Vec<Param>,
     pub body: Block,
-    pub return_type: DataType,
 }
 
 #[allow(dead_code)]
