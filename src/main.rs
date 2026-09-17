@@ -11,8 +11,7 @@ use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser};
 fn main() {
     let source = r#"
         int main() {
-            int a = x + 5;
-            return a * x + 5 - 1;
+            return 5;
         }
     "#;
 
