@@ -26,6 +26,7 @@ pub enum Expr {
     String(String),
     Ident(String),
     BinaryExpr(Box<BinaryExpr>),
+    Empty,
 }
 
 #[allow(dead_code)]

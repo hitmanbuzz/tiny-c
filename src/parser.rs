@@ -82,6 +82,11 @@ impl Parser {
                     Err(err) => Err(err),
                 }
             }
+            Token::SemiColon => Ok(Decl::Var(VarStmt {
+                data_type,
+                name,
+                expr: Expr::Empty,
+            })),
             t => {
                 return Err(format!(
                     "invalid token after `Identifier ({})`: {:?}",
@@ -194,6 +199,10 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, min_bp: f32) -> Result<Expr, String> {
+        if self.tokens.peek().unwrap_or(&Token::Eof) == &Token::SemiColon {
+            return Ok(Expr::Empty);
+        }
+
         let mut lhs = match self.tokens.next().unwrap_or(Token::Eof) {
             Token::String(str) => Expr::String(str),
             Token::Identifier(str) => Expr::Ident(str),
@@ -210,6 +219,7 @@ impl Parser {
                     t => return Err(format!("expected `RightParen` but found: {:?}", t)),
                 }
             }
+            // Token::SemiColon => {}
             t => return Err(format!("unexpected token in expr: {:?}", t)),
         };
 

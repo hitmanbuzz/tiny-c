@@ -3,16 +3,16 @@ mod debug;
 mod error;
 mod lexer;
 mod parser;
+mod semantic;
 mod token;
 mod types;
 
-use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser};
+use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser, semantic::Symantic};
 
 fn main() {
     let source = r#"
         int main() {
-            int a = 1 + 2;
-            return a * 2;
+            return;
         }
     "#;
 
@@ -28,4 +28,7 @@ fn main() {
     let mut parser = Parser::new(lexer.tokens);
     parser.parse();
     parser.print();
+
+    let sym = Symantic::new(&parser.ast);
+    sym.analyze();
 }
