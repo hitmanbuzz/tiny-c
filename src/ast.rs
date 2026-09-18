@@ -2,25 +2,25 @@ use std::fmt::Display;
 
 use crate::types::DataType;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ast {
     pub decls: Vec<Decl>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Decl {
     FuncDef(FunctionDef),
     Var(VarStmt),
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Stmt {
     Return(Expr),
     Var(VarStmt),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expr {
     Int32(i32),
     String(String),
@@ -30,7 +30,7 @@ pub enum Expr {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FunctionDef {
     pub return_type: DataType,
     pub name: String,
@@ -39,25 +39,25 @@ pub struct FunctionDef {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Param {
     pub name: String,
     pub p_type: DataType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VarStmt {
     pub data_type: DataType,
     pub name: String,
     pub expr: Expr,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -66,7 +66,7 @@ pub enum BinaryOp {
     Modulo,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BinaryExpr {
     pub left: Expr,
     pub op: BinaryOp,

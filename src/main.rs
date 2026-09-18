@@ -11,10 +11,9 @@ use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser, semantic::Semantic};
 
 fn main() {
     let source = r#"
+        void test;
         int main() {
-            int x = 67;
-            int y = 67;
-            return y;
+            int x = 1 + test;
         }
     "#;
 

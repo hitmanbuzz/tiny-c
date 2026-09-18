@@ -72,6 +72,10 @@ impl<'s> Semantic<'s> {
         Ok(())
     }
 
+    fn analyze_binary_expr(&self, expr: &mut Expr) -> Result<DataType, String> {
+        return self.get_expr_type(expr);
+    }
+
     fn get_expr_type(&self, expr: &Expr) -> Result<DataType, String> {
         match expr {
             Expr::Int32(_) => Ok(DataType::Int),
@@ -79,7 +83,19 @@ impl<'s> Semantic<'s> {
             Expr::Ident(name) => self
                 .lookup(name)
                 .ok_or_else(|| format!("use of undeclared identifier: '{}'", name)),
-            Expr::BinaryExpr(_) => todo!(),
+            Expr::BinaryExpr(expr) => {
+                let mut expr = *expr.clone();
+                let left_expr = self.analyze_binary_expr(&mut expr.left)?;
+                let right_expr = self.analyze_binary_expr(&mut expr.right)?;
+
+                if left_expr != right_expr {
+                    return Err(format!(
+                        "operation of different expression data type not allowed"
+                    ));
+                }
+
+                Ok(left_expr)
+            }
             Expr::Empty => Ok(DataType::Void),
         }
     }
