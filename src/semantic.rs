@@ -1,61 +1,74 @@
+use std::collections::{HashMap, hash_map::Entry};
+
 use crate::{
     ast::{Ast, Decl, Expr, FunctionDef, Stmt, VarStmt},
     types::DataType,
 };
 
-pub struct Symantic<'s> {
+pub struct Semantic<'s> {
     ast: &'s Ast,
+    scopes: Vec<HashMap<String, DataType>>,
 }
 
-impl<'s> Symantic<'s> {
+impl<'s> Semantic<'s> {
     pub fn new(ast: &'s Ast) -> Self {
-        Self { ast }
-    }
-
-    pub fn analyze(&self) {
-        for decl in self.ast.decls.iter() {
-            match decl {
-                Decl::FuncDef(fd) => {
-                    if let Err(e) = self.analyze_fn(fd) {
-                        eprintln!("[ERROR]: {}", e);
-                    }
-                }
-                Decl::Var(vs) => {
-                    if let Err(e) = self.analyze_var(vs) {
-                        eprintln!("[ERROR]: {}", e);
-                    }
-                }
-            }
+        Self {
+            ast,
+            scopes: Vec::new(),
         }
     }
 
-    fn analyze_fn(&self, fd: &FunctionDef) -> Result<(), String> {
+    pub fn analyze(&mut self) {
+        // global scope
+        self.entry_scope();
+
+        for decl in self.ast.decls.iter() {
+            let result = match decl {
+                Decl::Var(vs) => self.analyze_var(vs),
+                Decl::FuncDef(fd) => self.analyze_fn(fd),
+            };
+
+            if let Err(e) = result {
+                eprintln!("[ERROR]: {}", e);
+            }
+        }
+
+        self.exit_scope();
+    }
+
+    fn analyze_fn(&mut self, fd: &FunctionDef) -> Result<(), String> {
+        // local scope
+        self.entry_scope();
+
         for stmt in fd.body.stmts.iter() {
             match stmt {
                 Stmt::Return(expr) => {
                     let expr_type = self.get_expr_type(expr)?;
                     if fd.return_type != expr_type {
                         return Err(format!(
-                            "incompatible function return type and return stmt expr: `{:?}` != `{:?}`",
+                            "incompatible function return type and return stmt expr: '{:?}' != '{:?}'",
                             fd.return_type, expr_type,
                         ));
                     }
                 }
-                Stmt::Var(var_stmt) => todo!(),
+                Stmt::Var(stmt) => self.analyze_var(stmt)?,
             }
         }
 
+        self.exit_scope();
         Ok(())
     }
 
-    fn analyze_var(&self, vs: &VarStmt) -> Result<(), String> {
+    fn analyze_var(&mut self, vs: &VarStmt) -> Result<(), String> {
         let expr_type = self.get_expr_type(&vs.expr)?;
         if vs.data_type != expr_type {
             return Err(format!(
-                "incompatible var return type and var expr: `{:?} != `{:?}",
+                "incompatible var return type and var expr: '{:?}' != '{:?}'",
                 vs.data_type, expr_type,
             ));
         }
+
+        self.declare(vs.name.clone(), vs.data_type)?;
         Ok(())
     }
 
@@ -63,9 +76,39 @@ impl<'s> Symantic<'s> {
         match expr {
             Expr::Int32(_) => Ok(DataType::Int),
             Expr::String(_) => Ok(DataType::CharPtr),
-            Expr::Ident(_) => todo!(),
+            Expr::Ident(name) => self
+                .lookup(name)
+                .ok_or_else(|| format!("use of undeclared identifier: '{}'", name)),
             Expr::BinaryExpr(_) => todo!(),
             Expr::Empty => Ok(DataType::Void),
         }
+    }
+
+    fn declare(&mut self, name: String, data_type: DataType) -> Result<(), String> {
+        let scope = self.scopes.last_mut().unwrap();
+        match scope.entry(name) {
+            Entry::Occupied(entry) => Err(format!("redefinition of '{}'", entry.key())),
+            Entry::Vacant(entry) => {
+                entry.insert(data_type);
+                Ok(())
+            }
+        }
+    }
+
+    fn lookup(&self, name: &str) -> Option<DataType> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(data_type) = scope.get(name) {
+                return Some(*data_type);
+            }
+        }
+        None
+    }
+
+    fn entry_scope(&mut self) {
+        self.scopes.push(HashMap::new());
+    }
+
+    fn exit_scope(&mut self) {
+        self.scopes.pop();
     }
 }

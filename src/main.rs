@@ -7,12 +7,14 @@ mod semantic;
 mod token;
 mod types;
 
-use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser, semantic::Symantic};
+use crate::{error::ErrorMsg, lexer::Lexer, parser::Parser, semantic::Semantic};
 
 fn main() {
     let source = r#"
         int main() {
-            return;
+            int x = 67;
+            int y = 67;
+            return y;
         }
     "#;
 
@@ -29,6 +31,6 @@ fn main() {
     parser.parse();
     parser.print();
 
-    let sym = Symantic::new(&parser.ast);
+    let mut sym = Semantic::new(&parser.ast);
     sym.analyze();
 }
