@@ -1,6 +1,7 @@
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 
+#[allow(dead_code)]
 impl<'l> Lexer<'l> {
     pub fn print(&self) {
         println!("―――――――――――――――――――――――――――――― LEXER ――――――――――――――――――――――――――――――");
@@ -9,6 +10,7 @@ impl<'l> Lexer<'l> {
     }
 }
 
+#[allow(dead_code)]
 impl Parser {
     pub fn print(&self) {
         println!("――――――――――――――――――――――――――――――  AST  ――――――――――――――――――――――――――――――");
