@@ -1,120 +1,137 @@
-use std::{iter::Peekable, str::Chars};
+use std::{iter::Peekable, str::CharIndices};
 
-use crate::{error::LexerError, token::Token};
+use crate::token::{Token, TokenData};
 
 pub struct Lexer<'l> {
-    pub tokens: Vec<Token>,
-    pub errors: Vec<LexerError>,
-    source: Peekable<Chars<'l>>,
+    pub tokens: Vec<TokenData>,
+    source: Peekable<CharIndices<'l>>,
+    line: usize,
+    last_pos: usize,
+}
+
+struct LexError {
+    msg: String,
+    line: usize,
+    pos: usize,
 }
 
 impl<'l> Lexer<'l> {
     pub fn new(source: &'l str) -> Self {
         Self {
             tokens: Vec::new(),
-            errors: Vec::new(),
-            source: source.chars().peekable(),
+            source: source.char_indices().peekable(),
+            line: 1,
+            last_pos: source.len(),
         }
     }
 
     pub fn tokenize(&mut self) {
         while self.source.peek().is_some() {
-            self.match_token();
+            if let Err(e) = self.match_token() {
+                eprintln!(
+                    "[LEXER ERROR] [Line: {} | Pos: {}]: {}",
+                    e.line, e.pos, e.msg
+                );
+            }
         }
-        self.add_token(Token::Eof);
+        self.add_token(Token::Eof, self.last_pos);
     }
 
-    fn match_token(&mut self) {
+    fn match_token(&mut self) -> Result<(), LexError> {
         match self.source.next() {
-            Some(c) => match c {
-                '+' => self.add_token(Token::Plus),
-                '-' => self.add_token(Token::Minus),
-                '%' => self.add_token(Token::Modulo),
-                '(' => self.add_token(Token::LeftParen),
-                ')' => self.add_token(Token::RightParen),
-                '{' => self.add_token(Token::LeftCurlyBr),
-                '}' => self.add_token(Token::RightCurlyBr),
-                '[' => self.add_token(Token::LeftBr),
-                ']' => self.add_token(Token::RightBr),
-                '?' => self.add_token(Token::Question),
-                ':' => self.add_token(Token::Colon),
-                ';' => self.add_token(Token::SemiColon),
+            Some(c) => match c.1 {
+                '+' => self.add_token(Token::Plus, c.0),
+                '-' => self.add_token(Token::Minus, c.0),
+                '%' => self.add_token(Token::Modulo, c.0),
+                '(' => self.add_token(Token::LeftParen, c.0),
+                ')' => self.add_token(Token::RightParen, c.0),
+                '{' => self.add_token(Token::LeftCurlyBr, c.0),
+                '}' => self.add_token(Token::RightCurlyBr, c.0),
+                '[' => self.add_token(Token::LeftBr, c.0),
+                ']' => self.add_token(Token::RightBr, c.0),
+                '?' => self.add_token(Token::Question, c.0),
+                ':' => self.add_token(Token::Colon, c.0),
+                ';' => self.add_token(Token::SemiColon, c.0),
                 '*' => {
                     if let Some(&next) = self.source.peek() {
-                        if next == '*' {
+                        if next.1 == '*' {
                             self.source.next();
-                            self.add_token(Token::StarStar);
+                            self.add_token(Token::StarStar, next.0);
                         } else {
-                            self.add_token(Token::Star);
+                            self.add_token(Token::Star, c.0);
                         }
                     } else {
-                        self.add_token(Token::Star);
+                        self.add_token(Token::Star, c.0);
                     }
                 }
                 '/' => {
                     if let Some(&next) = self.source.peek() {
-                        if next == '/' {
+                        if next.1 == '/' {
                             self.source.next();
-                            self.add_token(Token::DoubleForwardSlash);
+                            self.add_token(Token::DoubleForwardSlash, next.0);
                         } else {
-                            self.add_token(Token::ForwardSlash);
+                            self.add_token(Token::ForwardSlash, c.0);
                         }
                     } else {
-                        self.add_token(Token::ForwardSlash);
+                        self.add_token(Token::ForwardSlash, c.0);
                     }
                 }
                 '=' => {
                     if let Some(&next) = self.source.peek() {
-                        if next == '=' {
+                        if next.1 == '=' {
                             self.source.next();
-                            self.add_token(Token::EqualEqual);
+                            self.add_token(Token::EqualEqual, next.0);
                         } else {
-                            self.add_token(Token::Equal);
+                            self.add_token(Token::Equal, c.0);
                         }
                     } else {
-                        self.add_token(Token::Equal);
+                        self.add_token(Token::Equal, c.0);
                     }
                 }
-                '"' => self.lex_str(c),
-                'a'..='z' | 'A'..='Z' => self.lex_ident(c),
-                '0'..='9' => self.lex_num(c),
+                '"' => self.lex_str(c)?,
+                'a'..='z' | 'A'..='Z' => self.lex_ident(c)?,
+                '0'..='9' => self.lex_num(c)?,
                 _ => {
-                    if c.is_whitespace() {
-                        return;
+                    if c.1 == '\n' {
+                        self.line += 1;
+                    } else if c.1.is_whitespace() {
+                        return Ok(());
                     } else {
-                        self.add_token(Token::Invalid(c));
+                        self.add_token(Token::Invalid(c.1), c.0);
                     }
                 }
             },
             None => {}
         }
+
+        Ok(())
     }
 
-    fn lex_ident(&mut self, first_char: char) {
+    fn lex_ident(&mut self, first_char: (usize, char)) -> Result<(), LexError> {
         let mut ident_token = String::new();
-        ident_token.push(first_char);
+        ident_token.push(first_char.1);
 
         let mut is_letter_start = false;
-        let mut is_bad = false;
+        let mut is_good = true;
 
         while let Some(&token) = self.source.peek() {
-            match token {
+            match token.1 {
                 '_' => {
-                    ident_token.push(token);
+                    ident_token.push(token.1);
                     self.source.next();
                 }
                 'a'..='z' | 'A'..='Z' => {
                     if !is_letter_start {
                         is_letter_start = true;
                     }
-                    ident_token.push(token);
+                    ident_token.push(token.1);
                     self.source.next();
                 }
                 '0'..='9' => {
                     if !is_letter_start {
-                        is_bad = true;
+                        is_good = false
                     }
-                    ident_token.push(token);
+                    ident_token.push(token.1);
                     self.source.next();
                 }
                 _ => {
@@ -124,28 +141,37 @@ impl<'l> Lexer<'l> {
             }
         }
 
-        match is_bad {
-            true => self.add_err(LexerError::IdentStartWithNum(ident_token)),
-            false => self.add_token(Token::Identifier(ident_token)),
+        match is_good {
+            true => {
+                self.add_token(Token::Identifier(ident_token), first_char.0);
+                Ok(())
+            }
+            false => {
+                return Err(LexError {
+                    msg: format!("identifier start with a number: '{}'", ident_token),
+                    line: self.line,
+                    pos: first_char.0,
+                });
+            }
         }
     }
 
-    fn lex_num(&mut self, first_char: char) {
+    fn lex_num(&mut self, first_char: (usize, char)) -> Result<(), LexError> {
         let mut num_token = String::new();
-        num_token.push(first_char);
+        num_token.push(first_char.1);
 
         let mut is_dot = false;
-        let mut is_bad = false;
+        let mut is_good = true;
 
         while let Some(&token) = self.source.peek() {
-            match token {
+            match token.1 {
                 '0'..='9' => {
-                    num_token.push(token);
+                    num_token.push(token.1);
                     self.source.next();
                 }
                 '.' => {
                     if is_dot {
-                        is_bad = true;
+                        is_good = false;
                     } else {
                         is_dot = true;
                     }
@@ -158,42 +184,63 @@ impl<'l> Lexer<'l> {
             }
         }
 
-        match is_bad {
-            true => self.add_err(LexerError::NumHasDots(num_token)),
-            false => self.add_token(Token::Number(num_token)),
+        match is_good {
+            true => {
+                self.add_token(Token::Number(num_token), first_char.0);
+                Ok(())
+            }
+            false => {
+                return Err(LexError {
+                    msg: format!(
+                        "number contains more than one decimal point: '{}'",
+                        num_token
+                    ),
+                    line: self.line,
+                    pos: first_char.0,
+                });
+            }
         }
     }
 
-    fn lex_str(&mut self, first_char: char) {
+    fn lex_str(&mut self, first_char: (usize, char)) -> Result<(), LexError> {
         let mut str_token = String::new();
-        str_token.push(first_char);
+        str_token.push(first_char.1);
 
         let mut is_good = false;
 
         while let Some(token) = self.source.next() {
-            match token {
+            match token.1 {
                 '"' => {
                     is_good = true;
                     break;
                 }
                 _ => {
-                    str_token.push(token);
+                    str_token.push(token.1);
                 }
             }
         }
 
         match is_good {
-            true => self.add_token(Token::String(str_token)),
-            false => self.add_err(LexerError::BadString(str_token)),
+            true => {
+                self.add_token(Token::String(str_token), first_char.0);
+                Ok(())
+            }
+            false => {
+                return Err(LexError {
+                    msg: format!("string doesn't end with a quotation: ({})", str_token),
+                    line: self.line,
+                    pos: first_char.0,
+                });
+            }
         }
     }
 
-    fn add_token(&mut self, token: Token) {
-        self.tokens.push(token);
-    }
-
-    fn add_err(&mut self, err: LexerError) {
-        self.errors.push(err);
+    fn add_token(&mut self, token: Token, pos: usize) {
+        self.tokens.push(TokenData {
+            token,
+            line: self.line,
+            pos,
+        });
     }
 }
 
@@ -231,7 +278,7 @@ mod tests {
         );
 
         for i in 0..lexer.tokens.len() {
-            assert_eq!(lexer.tokens[i], good_tokens[i]);
+            assert_eq!(lexer.tokens[i].token, good_tokens[i]);
         }
     }
 
@@ -267,7 +314,7 @@ mod tests {
         );
 
         for i in 0..lexer.tokens.len() {
-            assert_eq!(lexer.tokens[i], good_tokens[i]);
+            assert_eq!(lexer.tokens[i].token, good_tokens[i]);
         }
     }
 }

@@ -29,7 +29,7 @@ impl<'s> Semantic<'s> {
             };
 
             if let Err(e) = result {
-                eprintln!("[ERROR]: {}", e);
+                eprintln!("[SEMANTIC ERROR]: {}", e);
             }
         }
 
@@ -46,7 +46,7 @@ impl<'s> Semantic<'s> {
                     let expr_type = self.get_expr_type(expr)?;
                     if fd.return_type != expr_type {
                         return Err(format!(
-                            "incompatible function return type and return stmt expr: '{:?}' != '{:?}'",
+                            "incompatible function return type and return stmt expr type: '{:?}' != '{:?}'",
                             fd.return_type, expr_type,
                         ));
                     }
@@ -63,17 +63,13 @@ impl<'s> Semantic<'s> {
         let expr_type = self.get_expr_type(&vs.expr)?;
         if vs.data_type != expr_type {
             return Err(format!(
-                "incompatible var return type and var expr: '{:?}' != '{:?}'",
+                "incompatible var data type and var expr type: '{:?}' != '{:?}'",
                 vs.data_type, expr_type,
             ));
         }
 
         self.declare(vs.name.clone(), vs.data_type)?;
         Ok(())
-    }
-
-    fn analyze_binary_expr(&self, expr: &mut Expr) -> Result<DataType, String> {
-        return self.get_expr_type(expr);
     }
 
     fn get_expr_type(&self, expr: &Expr) -> Result<DataType, String> {
@@ -85,16 +81,17 @@ impl<'s> Semantic<'s> {
                 .ok_or_else(|| format!("use of undeclared identifier: '{}'", name)),
             Expr::BinaryExpr(expr) => {
                 let mut expr = *expr.clone();
-                let left_expr = self.analyze_binary_expr(&mut expr.left)?;
-                let right_expr = self.analyze_binary_expr(&mut expr.right)?;
+                let left_expr_type = self.get_expr_type(&mut expr.left)?;
+                let right_expr_type = self.get_expr_type(&mut expr.right)?;
 
-                if left_expr != right_expr {
+                if left_expr_type != right_expr_type {
                     return Err(format!(
-                        "operation of different expression data type not allowed"
+                        "operation of different expression data type not allowed: '{:?}' != '{:?}",
+                        left_expr_type, right_expr_type,
                     ));
                 }
 
-                Ok(left_expr)
+                Ok(left_expr_type)
             }
             Expr::Empty => Ok(DataType::Void),
         }

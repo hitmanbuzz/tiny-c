@@ -31,6 +31,23 @@ pub enum Token {
     Eof,
 }
 
+#[derive(Debug, Clone)]
+pub struct TokenData {
+    pub token: Token,
+    pub line: usize,
+    pub pos: usize,
+}
+
+impl Default for TokenData {
+    fn default() -> Self {
+        Self {
+            token: Token::Eof,
+            line: Default::default(),
+            pos: Default::default(),
+        }
+    }
+}
+
 impl Token {
     // (left_binding_power, right_binding_power, BinaryOp)
     pub fn bin_op(&self) -> Option<(f32, f32, BinaryOp)> {
