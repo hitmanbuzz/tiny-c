@@ -10,8 +10,10 @@ use crate::{lexer::Lexer, parser::Parser, semantic::Semantic};
 
 fn main() {
     let source = r#"
+        int x = 69;
         int main() {
-            int x = "Hello;
+            int x = 67;
+            return x;
         }
     "#;
 
@@ -21,8 +23,8 @@ fn main() {
 
     let mut parser = Parser::new(lexer.tokens);
     parser.parse();
-    // parser.print();
 
-    let mut sym = Semantic::new(&parser.ast);
-    sym.analyze();
+    let mut sym = Semantic::new();
+    sym.analyze(&mut parser.ast);
+    parser.print();
 }

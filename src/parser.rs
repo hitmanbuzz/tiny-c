@@ -3,7 +3,7 @@ use std::{iter::Peekable, vec::IntoIter};
 use crate::{
     ast::{Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, Stmt, VarStmt},
     token::{Token, TokenData},
-    types::{DataType, IDENTIFIERS, IdentType, Keyword},
+    types::{DataType, IdentType, Keyword, get_ident_type},
 };
 
 pub struct Parser {
@@ -63,7 +63,7 @@ impl Parser {
             pos: curr.pos,
         })?;
 
-        match *ident_type {
+        match ident_type {
             IdentType::DataType(data_type) => self.parse_node_type(data_type),
             IdentType::Keyword(keyword) => {
                 return Err(ParseError {
@@ -108,6 +108,7 @@ impl Parser {
                 data_type,
                 name,
                 expr: Expr::Empty,
+                id: None,
             })),
             t => {
                 return Err(ParseError {
@@ -141,6 +142,7 @@ impl Parser {
             data_type: data_type,
             name: name.to_string(),
             expr: expr,
+            id: None,
         });
     }
 
@@ -220,7 +222,7 @@ impl Parser {
             }
         };
 
-        match *ident_type {
+        match ident_type {
             IdentType::DataType(data_type) => {
                 let node = self.parse_node_type(data_type)?;
                 match node {
@@ -342,8 +344,8 @@ impl Parser {
         return self.tokens.peek().unwrap_or(&TokenData::default()).clone();
     }
 
-    fn get_ident(&self, ident: &str) -> Option<&IdentType> {
-        IDENTIFIERS.get(ident)
+    fn get_ident(&self, ident: &str) -> Option<IdentType> {
+        get_ident_type(ident)
     }
 }
 
@@ -465,6 +467,7 @@ mod tests {
                             data_type: DataType::Int,
                             name: String::from("a"),
                             expr: Expr::Int32(67),
+                            id: None,
                         }),
                         Stmt::Return(Expr::Int32(69)),
                     ],
@@ -559,6 +562,7 @@ mod tests {
                                     right: Expr::Int32(3),
                                 })),
                             })),
+                            id: None,
                         }),
                         Stmt::Var(VarStmt {
                             data_type: DataType::Int,
@@ -590,6 +594,7 @@ mod tests {
                                 op: BinaryOp::Sub,
                                 right: Expr::Int32(7),
                             })),
+                            id: None,
                         }),
                     ],
                 },
