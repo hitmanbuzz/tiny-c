@@ -5,24 +5,24 @@ use crate::{
     types::DataType,
 };
 
-pub struct Semantic<'s> {
-    ast: &'s Ast,
+pub struct Semantic {
     scopes: Vec<HashMap<String, DataType>>,
+    id_counter: usize,
 }
 
-impl<'s> Semantic<'s> {
-    pub fn new(ast: &'s Ast) -> Self {
+impl Semantic {
+    pub fn new() -> Self {
         Self {
-            ast,
             scopes: Vec::new(),
+            id_counter: 0,
         }
     }
 
-    pub fn analyze(&mut self) {
+    pub fn analyze(&mut self, ast: &mut Ast) {
         // global scope
         self.entry_scope();
 
-        for decl in self.ast.decls.iter() {
+        for decl in &mut ast.decls {
             let result = match decl {
                 Decl::Var(vs) => self.analyze_var(vs),
                 Decl::FuncDef(fd) => self.analyze_fn(fd),
@@ -36,11 +36,11 @@ impl<'s> Semantic<'s> {
         self.exit_scope();
     }
 
-    fn analyze_fn(&mut self, fd: &FunctionDef) -> Result<(), String> {
+    fn analyze_fn(&mut self, fd: &mut FunctionDef) -> Result<(), String> {
         // local scope
         self.entry_scope();
 
-        for stmt in fd.body.stmts.iter() {
+        for stmt in fd.body.stmts.iter_mut() {
             match stmt {
                 Stmt::Return(expr) => {
                     let expr_type = self.get_expr_type(expr)?;
@@ -59,7 +59,7 @@ impl<'s> Semantic<'s> {
         Ok(())
     }
 
-    fn analyze_var(&mut self, vs: &VarStmt) -> Result<(), String> {
+    fn analyze_var(&mut self, vs: &mut VarStmt) -> Result<(), String> {
         let expr_type = self.get_expr_type(&vs.expr)?;
         if vs.data_type != expr_type {
             return Err(format!(
@@ -68,7 +68,8 @@ impl<'s> Semantic<'s> {
             ));
         }
 
-        self.declare(vs.name.clone(), vs.data_type)?;
+        let id = self.declare(vs.name.clone(), vs.data_type)?;
+        vs.id = Some(id);
         Ok(())
     }
 
@@ -97,13 +98,15 @@ impl<'s> Semantic<'s> {
         }
     }
 
-    fn declare(&mut self, name: String, data_type: DataType) -> Result<(), String> {
+    fn declare(&mut self, name: String, data_type: DataType) -> Result<usize, String> {
         let scope = self.scopes.last_mut().unwrap();
         match scope.entry(name) {
             Entry::Occupied(entry) => Err(format!("redefinition of '{}'", entry.key())),
             Entry::Vacant(entry) => {
+                let id = self.id_counter;
+                self.id_counter += 1;
                 entry.insert(data_type);
-                Ok(())
+                Ok(id)
             }
         }
     }

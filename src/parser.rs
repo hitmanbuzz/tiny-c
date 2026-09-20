@@ -108,6 +108,7 @@ impl Parser {
                 data_type,
                 name,
                 expr: Expr::Empty,
+                id: None,
             })),
             t => {
                 return Err(ParseError {
@@ -141,6 +142,7 @@ impl Parser {
             data_type: data_type,
             name: name.to_string(),
             expr: expr,
+            id: None,
         });
     }
 
@@ -465,6 +467,7 @@ mod tests {
                             data_type: DataType::Int,
                             name: String::from("a"),
                             expr: Expr::Int32(67),
+                            id: None,
                         }),
                         Stmt::Return(Expr::Int32(69)),
                     ],
@@ -559,6 +562,7 @@ mod tests {
                                     right: Expr::Int32(3),
                                 })),
                             })),
+                            id: None,
                         }),
                         Stmt::Var(VarStmt {
                             data_type: DataType::Int,
@@ -590,6 +594,7 @@ mod tests {
                                 op: BinaryOp::Sub,
                                 right: Expr::Int32(7),
                             })),
+                            id: None,
                         }),
                     ],
                 },
