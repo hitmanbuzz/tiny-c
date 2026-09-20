@@ -3,7 +3,7 @@ use std::{iter::Peekable, vec::IntoIter};
 use crate::{
     ast::{Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, Stmt, VarStmt},
     token::{Token, TokenData},
-    types::{DataType, IDENTIFIERS, IdentType, Keyword},
+    types::{DataType, IdentType, Keyword, get_ident_type},
 };
 
 pub struct Parser {
@@ -63,7 +63,7 @@ impl Parser {
             pos: curr.pos,
         })?;
 
-        match *ident_type {
+        match ident_type {
             IdentType::DataType(data_type) => self.parse_node_type(data_type),
             IdentType::Keyword(keyword) => {
                 return Err(ParseError {
@@ -220,7 +220,7 @@ impl Parser {
             }
         };
 
-        match *ident_type {
+        match ident_type {
             IdentType::DataType(data_type) => {
                 let node = self.parse_node_type(data_type)?;
                 match node {
@@ -342,8 +342,8 @@ impl Parser {
         return self.tokens.peek().unwrap_or(&TokenData::default()).clone();
     }
 
-    fn get_ident(&self, ident: &str) -> Option<&IdentType> {
-        IDENTIFIERS.get(ident)
+    fn get_ident(&self, ident: &str) -> Option<IdentType> {
+        get_ident_type(ident)
     }
 }
 

@@ -11,7 +11,7 @@ use crate::{lexer::Lexer, parser::Parser, semantic::Semantic};
 fn main() {
     let source = r#"
         int main() {
-            int x = "Hello;
+            int x = "Hello";
         }
     "#;
 

@@ -1,5 +1,3 @@
-use std::{collections::HashMap, sync::LazyLock};
-
 #[derive(Debug, Clone, Copy)]
 pub enum IdentType {
     DataType(DataType),
@@ -18,11 +16,12 @@ pub enum Keyword {
     Return,
 }
 
-pub static IDENTIFIERS: LazyLock<HashMap<&'static str, IdentType>> = LazyLock::new(|| {
-    HashMap::from([
-        ("int", IdentType::DataType(DataType::Int)),
-        ("void", IdentType::DataType(DataType::Void)),
-        ("char*", IdentType::DataType(DataType::CharPtr)),
-        ("return", IdentType::Keyword(Keyword::Return)),
-    ])
-});
+pub fn get_ident_type(ident: &str) -> Option<IdentType> {
+    match ident {
+        "int" => Some(IdentType::DataType(DataType::Int)),
+        "void" => Some(IdentType::DataType(DataType::Void)),
+        "char*" => Some(IdentType::DataType(DataType::CharPtr)),
+        "return" => Some(IdentType::Keyword(Keyword::Return)),
+        _ => None,
+    }
+}
