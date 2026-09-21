@@ -1,7 +1,7 @@
 use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
-    ast::{Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, Stmt, VarStmt},
+    ast::{AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, Stmt, VarStmt},
     token::{Token, TokenData},
     types::{DataType, IdentType, Keyword, get_ident_type},
 };
@@ -107,7 +107,7 @@ impl Parser {
             Token::SemiColon => Ok(Decl::Var(VarStmt {
                 data_type,
                 name,
-                expr: Expr::Empty,
+                value: Expr::Empty,
                 id: None,
             })),
             t => {
@@ -141,7 +141,7 @@ impl Parser {
         return Ok(VarStmt {
             data_type: data_type,
             name: name.to_string(),
-            expr: expr,
+            value: expr,
             id: None,
         });
     }
@@ -204,15 +204,29 @@ impl Parser {
 
     fn parse_stmt(&mut self) -> Result<Stmt, ParseError> {
         let curr = self.next();
-        let ident_type = match curr.token {
-            Token::Identifier(str) => self.get_ident(&str).ok_or_else(|| ParseError {
-                msg: format!(
-                    "conversion of `Identifier ({})` to its distinct type is not implemented",
-                    str
-                ),
-                line: curr.line,
-                pos: curr.pos,
-            })?,
+        let stmt = match curr.token {
+            Token::Identifier(str) => {
+                if let Some(ident_type) = self.get_ident(&str) {
+                    match ident_type {
+                        IdentType::DataType(data_type) => {
+                            let node = self.parse_node_type(data_type)?;
+                            match node {
+                                Decl::FuncDef(f) => Err(ParseError {
+                                    msg: format!("unexpected function within a function: {:?}", f),
+                                    line: curr.line,
+                                    pos: curr.pos,
+                                }),
+                                Decl::Var(v) => Ok(Stmt::Var(v)),
+                            }
+                        }
+                        IdentType::Keyword(keyword) => match keyword {
+                            Keyword::Return => self.parse_return_stmt(),
+                        },
+                    }
+                } else {
+                    return self.parse_assign_stmt(&str);
+                }
+            }
             t => {
                 return Err(ParseError {
                     msg: format!("expected `Identifier` in parse_stmt but found: {:?}", t),
@@ -221,23 +235,40 @@ impl Parser {
                 });
             }
         };
+        return stmt;
+    }
 
-        match ident_type {
-            IdentType::DataType(data_type) => {
-                let node = self.parse_node_type(data_type)?;
-                match node {
-                    Decl::FuncDef(f) => Err(ParseError {
-                        msg: format!("unexpected function within a function: {:?}", f),
-                        line: curr.line,
-                        pos: curr.pos,
-                    }),
-                    Decl::Var(v) => Ok(Stmt::Var(v)),
-                }
-            }
-            IdentType::Keyword(keyword) => match keyword {
-                Keyword::Return => Ok(self.parse_return_stmt()?),
-            },
+    fn parse_assign_stmt(&mut self, target: &str) -> Result<Stmt, ParseError> {
+        let mut curr = self.next();
+        if curr.token != Token::Equal {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `Equal` in parse_assign_stmt but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
         }
+
+        let expr = self.parse_expr(0.0)?;
+
+        curr = self.next();
+        if curr.token != Token::SemiColon {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `SemiColon` in parse_assign_stmt but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        return Ok(Stmt::Assign(AssignStmt {
+            target: Expr::Ident(target.to_string(), None),
+            value: expr,
+        }));
     }
 
     fn parse_return_stmt(&mut self) -> Result<Stmt, ParseError> {
@@ -267,7 +298,7 @@ impl Parser {
         let curr = self.next();
         let mut lhs = match curr.token {
             Token::String(str) => Expr::String(str),
-            Token::Identifier(str) => Expr::Ident(str),
+            Token::Identifier(str) => Expr::Ident(str, None),
             Token::Number(str) => {
                 let num = str.parse::<i32>().map_err(|_| ParseError {
                     msg: format!("failed to parse `{}` to i32", str),
@@ -466,7 +497,7 @@ mod tests {
                         Stmt::Var(VarStmt {
                             data_type: DataType::Int,
                             name: String::from("a"),
-                            expr: Expr::Int32(67),
+                            value: Expr::Int32(67),
                             id: None,
                         }),
                         Stmt::Return(Expr::Int32(69)),
@@ -553,7 +584,7 @@ mod tests {
                             name: "a".to_string(),
 
                             // 1 * (2 + 3)
-                            expr: Expr::BinaryExpr(Box::new(BinaryExpr {
+                            value: Expr::BinaryExpr(Box::new(BinaryExpr {
                                 left: Expr::Int32(1),
                                 op: BinaryOp::Mul,
                                 right: Expr::BinaryExpr(Box::new(BinaryExpr {
@@ -569,7 +600,7 @@ mod tests {
                             name: "b".to_string(),
 
                             // ((1 + ((2 * 3) * 4)) + (5 / 6)) - 7
-                            expr: Expr::BinaryExpr(Box::new(BinaryExpr {
+                            value: Expr::BinaryExpr(Box::new(BinaryExpr {
                                 left: Expr::BinaryExpr(Box::new(BinaryExpr {
                                     left: Expr::BinaryExpr(Box::new(BinaryExpr {
                                         left: Expr::Int32(1),

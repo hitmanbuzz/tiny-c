@@ -9,13 +9,7 @@ mod types;
 use crate::{lexer::Lexer, parser::Parser, semantic::Semantic};
 
 fn main() {
-    let source = r#"
-        int x = 69;
-        int main() {
-            int x = 67;
-            return x;
-        }
-    "#;
+    let source = include_str!("../tests/source.tc");
 
     let mut lexer = Lexer::new(source);
     lexer.tokenize();
@@ -26,5 +20,6 @@ fn main() {
 
     let mut sym = Semantic::new();
     sym.analyze(&mut parser.ast);
+
     parser.print();
 }

@@ -18,13 +18,14 @@ pub enum Decl {
 pub enum Stmt {
     Return(Expr),
     Var(VarStmt),
+    Assign(AssignStmt),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expr {
     Int32(i32),
     String(String),
-    Ident(String),
+    Ident(String, Option<usize>),
     BinaryExpr(Box<BinaryExpr>),
     Empty,
 }
@@ -54,8 +55,14 @@ pub struct Block {
 pub struct VarStmt {
     pub data_type: DataType,
     pub name: String,
-    pub expr: Expr,
+    pub value: Expr,
     pub id: Option<usize>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct AssignStmt {
+    pub target: Expr,
+    pub value: Expr,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -127,7 +134,7 @@ fn fmt_decl(f: &mut Formatter<'_>, decl: &Decl, prefix: &str, last: bool) -> fmt
             writeln!(f, "{child_prefix}└── Value")?;
 
             let expr_prefix = format!("{child_prefix}    ");
-            fmt_expr(f, &var.expr, &expr_prefix, true)?;
+            fmt_expr(f, &var.value, &expr_prefix, true)?;
         }
     }
 
@@ -187,7 +194,23 @@ fn fmt_stmt(f: &mut Formatter<'_>, stmt: &Stmt, prefix: &str, last: bool) -> fmt
             writeln!(f, "{child_prefix}└── Value")?;
 
             let expr_prefix = format!("{child_prefix}    ");
-            fmt_expr(f, &var.expr, &expr_prefix, true)?;
+            fmt_expr(f, &var.value, &expr_prefix, true)?;
+        }
+        Stmt::Assign(assign) => {
+            writeln!(f, "{prefix}{branch}Assign")?;
+
+            let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
+
+            writeln!(f, "{child_prefix}├── Target")?;
+
+            // Target is always followed by Value, so it's never the "last" child.
+            let target_prefix = format!("{child_prefix}│   ");
+            fmt_expr(f, &assign.target, &target_prefix, true)?;
+
+            writeln!(f, "{child_prefix}└── Value")?;
+
+            let value_prefix = format!("{child_prefix}    ");
+            fmt_expr(f, &assign.value, &value_prefix, true)?;
         }
     }
 
@@ -206,8 +229,8 @@ fn fmt_expr(f: &mut Formatter<'_>, expr: &Expr, prefix: &str, last: bool) -> fmt
             writeln!(f, "{prefix}{branch}String: {:?}", value)?;
         }
 
-        Expr::Ident(name) => {
-            writeln!(f, "{prefix}{branch}Ident: {name}")?;
+        Expr::Ident(name, id) => {
+            writeln!(f, "{prefix}{branch}Ident: {name}({:?})", id)?;
         }
 
         Expr::Empty => {
