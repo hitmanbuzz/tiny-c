@@ -22,10 +22,17 @@ pub enum Stmt {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct IdentExpr {
+    pub name: String,
+    pub id: Option<usize>,
+    pub data_type: Option<DataType>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expr {
     Int32(i32),
     String(String),
-    Ident(String, Option<usize>),
+    Ident(IdentExpr),
     BinaryExpr(Box<BinaryExpr>),
     Empty,
 }
@@ -57,6 +64,7 @@ pub struct VarStmt {
     pub name: String,
     pub value: Expr,
     pub id: Option<usize>,
+    pub is_global: bool,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -131,6 +139,7 @@ fn fmt_decl(f: &mut Formatter<'_>, decl: &Decl, prefix: &str, last: bool) -> fmt
             writeln!(f, "{child_prefix}├── Type: {:?}", var.data_type)?;
             writeln!(f, "{child_prefix}├── Name: {}", var.name)?;
             writeln!(f, "{child_prefix}├── ID: {:?}", var.id)?;
+            writeln!(f, "{child_prefix}└── IsGlobal: {}", var.is_global)?;
             writeln!(f, "{child_prefix}└── Value")?;
 
             let expr_prefix = format!("{child_prefix}    ");
@@ -191,6 +200,7 @@ fn fmt_stmt(f: &mut Formatter<'_>, stmt: &Stmt, prefix: &str, last: bool) -> fmt
             writeln!(f, "{child_prefix}├── Type: {:?}", var.data_type)?;
             writeln!(f, "{child_prefix}├── Name: {}", var.name)?;
             writeln!(f, "{child_prefix}├── ID: {:?}", var.id)?;
+            writeln!(f, "{child_prefix}└── IsGlobal: {}", var.is_global)?;
             writeln!(f, "{child_prefix}└── Value")?;
 
             let expr_prefix = format!("{child_prefix}    ");
@@ -229,8 +239,12 @@ fn fmt_expr(f: &mut Formatter<'_>, expr: &Expr, prefix: &str, last: bool) -> fmt
             writeln!(f, "{prefix}{branch}String: {:?}", value)?;
         }
 
-        Expr::Ident(name, id) => {
-            writeln!(f, "{prefix}{branch}Ident: {name}({:?})", id)?;
+        Expr::Ident(expr) => {
+            writeln!(
+                f,
+                "{prefix}{branch}Ident: {}({:?}) - {:?}",
+                expr.name, expr.id, expr.data_type
+            )?;
         }
 
         Expr::Empty => {

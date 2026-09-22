@@ -6,6 +6,7 @@ pub enum IdentType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataType {
+    /// 32 bit signed integer (i32)
     Int,
     CharPtr,
     Void,

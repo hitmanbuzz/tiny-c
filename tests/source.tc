@@ -1,6 +1,5 @@
-int x = 69;
 int main() {
-	x = 20;
-	int x = 67;
-	return x + 1;
+	int x = 69;
+	int y = 67;
+	return x;
 }

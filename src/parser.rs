@@ -1,7 +1,7 @@
 use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
-    ast::{AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, Stmt, VarStmt},
+    ast::{AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, Stmt, VarStmt},
     token::{Token, TokenData},
     types::{DataType, IdentType, Keyword, get_ident_type},
 };
@@ -109,6 +109,7 @@ impl Parser {
                 name,
                 value: Expr::Empty,
                 id: None,
+                is_global: false,
             })),
             t => {
                 return Err(ParseError {
@@ -143,6 +144,7 @@ impl Parser {
             name: name.to_string(),
             value: expr,
             id: None,
+            is_global: false,
         });
     }
 
@@ -266,7 +268,11 @@ impl Parser {
         }
 
         return Ok(Stmt::Assign(AssignStmt {
-            target: Expr::Ident(target.to_string(), None),
+            target: Expr::Ident(IdentExpr {
+                name: target.to_string(),
+                id: None,
+                data_type: None,
+            }),
             value: expr,
         }));
     }
@@ -298,7 +304,11 @@ impl Parser {
         let curr = self.next();
         let mut lhs = match curr.token {
             Token::String(str) => Expr::String(str),
-            Token::Identifier(str) => Expr::Ident(str, None),
+            Token::Identifier(str) => Expr::Ident(IdentExpr {
+                name: str,
+                id: None,
+                data_type: None,
+            }),
             Token::Number(str) => {
                 let num = str.parse::<i32>().map_err(|_| ParseError {
                     msg: format!("failed to parse `{}` to i32", str),
@@ -482,7 +492,7 @@ mod tests {
         );
 
         for i in 0..lexer.tokens.len() {
-            assert_eq!(lexer.tokens[i].token, good_tokens[i]);
+            assert_eq!(good_tokens[i], lexer.tokens[i].token);
         }
 
         let mut parser = Parser::new(lexer.tokens);
@@ -499,8 +509,97 @@ mod tests {
                             name: String::from("a"),
                             value: Expr::Int32(67),
                             id: None,
+                            is_global: false,
                         }),
                         Stmt::Return(Expr::Int32(69)),
+                    ],
+                },
+                return_type: DataType::Int,
+            })],
+        };
+
+        assert_eq!(parser.ast, good_ast);
+    }
+
+    #[test]
+    fn test_assign_stmt() {
+        let source = "
+          int main() {
+             int x = 69;
+             x = 67;              
+             return x;
+          }  
+        ";
+
+        let mut lexer = Lexer::new(source);
+        lexer.tokenize();
+
+        assert!(
+            lexer.tokens.len() > 0,
+            "should have 19 tokens but got 0 instead"
+        );
+
+        let good_tokens: Vec<Token> = vec![
+            Token::Identifier("int".to_string()),
+            Token::Identifier("main".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftCurlyBr,
+            Token::Identifier("int".to_string()),
+            Token::Identifier("x".to_string()),
+            Token::Equal,
+            Token::Number("69".to_string()),
+            Token::SemiColon,
+            Token::Identifier("x".to_string()),
+            Token::Equal,
+            Token::Number("67".to_string()),
+            Token::SemiColon,
+            Token::Identifier("return".to_string()),
+            Token::Identifier("x".to_string()),
+            Token::SemiColon,
+            Token::RightCurlyBr,
+            Token::Eof,
+        ];
+
+        assert_eq!(
+            good_tokens.len(),
+            lexer.tokens.len(),
+            "should have same 19 tokens"
+        );
+
+        for i in 0..lexer.tokens.len() {
+            assert_eq!(good_tokens[i], lexer.tokens[i].token);
+        }
+
+        let mut parser = Parser::new(lexer.tokens);
+        parser.parse();
+
+        let good_ast = Ast {
+            decls: vec![Decl::FuncDef(FunctionDef {
+                name: String::from("main"),
+                params: vec![],
+                body: Block {
+                    stmts: vec![
+                        Stmt::Var(VarStmt {
+                            data_type: DataType::Int,
+                            name: String::from("x"),
+                            value: Expr::Int32(69),
+                            id: None,
+                            is_global: false,
+                        }),
+                        Stmt::Assign(AssignStmt {
+                            target: Expr::Ident(IdentExpr {
+                                name: "x".to_string(),
+                                id: None,
+                                data_type: None,
+                            }),
+                            value: Expr::Int32(67),
+                        }),
+                        Stmt::Return(Expr::Ident(IdentExpr {
+                            name: "x".to_string(),
+                            id: None,
+                            data_type: None,
+                        })),
                     ],
                 },
                 return_type: DataType::Int,
@@ -567,7 +666,7 @@ mod tests {
         );
 
         for i in 0..lexer.tokens.len() {
-            assert_eq!(lexer.tokens[i].token, good_tokens[i]);
+            assert_eq!(good_tokens[i], lexer.tokens[i].token);
         }
 
         let mut parser = Parser::new(lexer.tokens);
@@ -594,12 +693,11 @@ mod tests {
                                 })),
                             })),
                             id: None,
+                            is_global: false,
                         }),
                         Stmt::Var(VarStmt {
                             data_type: DataType::Int,
                             name: "b".to_string(),
-
-                            // ((1 + ((2 * 3) * 4)) + (5 / 6)) - 7
                             value: Expr::BinaryExpr(Box::new(BinaryExpr {
                                 left: Expr::BinaryExpr(Box::new(BinaryExpr {
                                     left: Expr::BinaryExpr(Box::new(BinaryExpr {
@@ -626,6 +724,7 @@ mod tests {
                                 right: Expr::Int32(7),
                             })),
                             id: None,
+                            is_global: false,
                         }),
                     ],
                 },
