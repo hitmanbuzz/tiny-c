@@ -22,7 +22,10 @@ fn main() {
     parser.parse();
 
     let mut sym = Semantic::new();
-    sym.analyze(&mut parser.ast);
+    let has_err = sym.analyze(&mut parser.ast);
+    if has_err {
+        return;
+    }
 
     // parser.print();
 

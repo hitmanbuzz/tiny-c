@@ -30,7 +30,8 @@ impl Semantic {
         }
     }
 
-    pub fn analyze(&mut self, ast: &mut Ast) {
+    pub fn analyze(&mut self, ast: &mut Ast) -> bool {
+        let mut has_err = false;
         // global scope
         self.entry_scope();
 
@@ -42,10 +43,12 @@ impl Semantic {
 
             if let Err(e) = result {
                 eprintln!("[SEMANTIC ERROR]: {}", e);
+                has_err = true;
             }
         }
 
         self.exit_scope();
+        return has_err;
     }
 
     fn analyze_fn(&mut self, fd: &mut FunctionDef) -> Result<(), String> {
