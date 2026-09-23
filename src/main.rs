@@ -31,5 +31,5 @@ fn main() {
     ir.gen_ir();
     let ir_source = ir.get_ir();
 
-    fs::write("output.ll", ir_source).unwrap();
+    fs::write("tests/output.ll", ir_source).unwrap();
 }
