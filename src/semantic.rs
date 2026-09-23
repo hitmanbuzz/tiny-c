@@ -36,7 +36,7 @@ impl Semantic {
 
         for decl in &mut ast.decls {
             let result = match decl {
-                Decl::Var(vs) => self.analyze_var(vs),
+                Decl::Var(vs) => self.analyze_var(vs, true),
                 Decl::FuncDef(fd) => self.analyze_fn(fd),
             };
 
@@ -63,7 +63,7 @@ impl Semantic {
                         ));
                     }
                 }
-                Stmt::Var(stmt) => self.analyze_var(stmt)?,
+                Stmt::Var(stmt) => self.analyze_var(stmt, false)?,
                 Stmt::Assign(stmt) => self.analyze_assign(stmt)?,
             }
         }
@@ -72,7 +72,7 @@ impl Semantic {
         Ok(())
     }
 
-    fn analyze_var(&mut self, vs: &mut VarStmt) -> Result<(), String> {
+    fn analyze_var(&mut self, vs: &mut VarStmt, is_global: bool) -> Result<(), String> {
         let scope = self.get_scope_data(&mut vs.value)?;
         if vs.data_type != scope.data_type {
             return Err(format!(
@@ -83,6 +83,7 @@ impl Semantic {
 
         let id = self.declare(vs.name.clone(), vs.data_type)?;
         vs.id = Some(id);
+        vs.is_global = is_global;
         Ok(())
     }
 
@@ -104,11 +105,12 @@ impl Semantic {
         match expr {
             Expr::Int32(_) => Ok(ScopeData::new(None, DataType::Int)),
             Expr::String(_) => Ok(ScopeData::new(None, DataType::CharPtr)),
-            Expr::Ident(name, id) => {
+            Expr::Ident(expr) => {
                 let scope = self
-                    .lookup(name)
-                    .ok_or_else(|| format!("use of undeclared identifier: '{}'", name))?;
-                *id = scope.id;
+                    .lookup(&expr.name)
+                    .ok_or_else(|| format!("use of undeclared identifier: '{}'", expr.name))?;
+                expr.id = scope.id;
+                expr.data_type = Some(scope.data_type);
                 return Ok(scope);
             }
             Expr::BinaryExpr(expr) => {

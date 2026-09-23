@@ -1,6 +1,4 @@
-int x = 69;
 int main() {
-	x = 20;
-	int x = 67;
-	return x + 1;
+	int x = 1 + 6 * 3 + 5 - 2 * 3;
+	return x;
 }

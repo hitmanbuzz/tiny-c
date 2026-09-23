@@ -1,12 +1,15 @@
 mod ast;
 mod debug;
+mod ir;
 mod lexer;
 mod parser;
 mod semantic;
 mod token;
 mod types;
 
-use crate::{lexer::Lexer, parser::Parser, semantic::Semantic};
+use std::fs;
+
+use crate::{ir::IrGen, lexer::Lexer, parser::Parser, semantic::Semantic};
 
 fn main() {
     let source = include_str!("../tests/source.tc");
@@ -21,5 +24,12 @@ fn main() {
     let mut sym = Semantic::new();
     sym.analyze(&mut parser.ast);
 
-    parser.print();
+    // parser.print();
+
+    // it will generate LLVM IR code
+    let mut ir = IrGen::new(&parser.ast);
+    ir.gen_ir();
+    let ir_source = ir.get_ir();
+
+    fs::write("output.ll", ir_source).unwrap();
 }
