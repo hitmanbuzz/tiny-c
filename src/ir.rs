@@ -1,6 +1,6 @@
 use crate::{
     ast::{
-        AssignStmt, Ast,
+        AssignStmt, Ast, BinaryExpr, BinaryOp,
         Decl::{FuncDef, Var},
         Expr, FunctionDef, Stmt, VarStmt,
     },
@@ -10,6 +10,7 @@ use crate::{
 pub struct IrGen<'i> {
     ast: &'i Ast,
     ir_source: String,
+    counter: usize,
 }
 
 impl<'i> IrGen<'i> {
@@ -17,6 +18,7 @@ impl<'i> IrGen<'i> {
         Self {
             ast,
             ir_source: String::new(),
+            counter: 0,
         }
     }
 
@@ -47,8 +49,8 @@ impl<'i> IrGen<'i> {
         for stmt in fd.body.stmts.iter() {
             match stmt {
                 Stmt::Return(expr) => {
-                    let value = self.process_expr(expr, false);
-                    self.push(format!("    ret {}", value).as_str());
+                    let (dt, value) = self.process_expr("", expr, false, 0);
+                    self.push(format!("    ret {} {}", dt, value).as_str());
                 }
                 Stmt::Var(vs) => self.process_vs(vs),
                 Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
@@ -60,38 +62,63 @@ impl<'i> IrGen<'i> {
 
     /// variable statement
     fn process_vs(&mut self, vs: &VarStmt) {
-        let dt = self.get_ir_type(vs.data_type);
-        let name = self.get_var_name(&vs.name, vs.id);
+        let alloca_dt = self.get_ir_type(vs.data_type);
+        let alloca_name = self.get_var_name(&vs.name, vs.id);
 
-        self.push(&format!("    {} = alloca {}", name, dt));
+        self.push(&format!("    {} = alloca {}", alloca_name, alloca_dt));
 
-        match vs.value {
-            Expr::Int32(value) => {
-                self.push(&format!("    store i32 {}, ptr {}", value, name));
-                let load_name = self.get_load_name(&vs.name, vs.id);
-                self.push(&format!("    {} = load {}, ptr {}", load_name, dt, name));
-            }
-            _ => todo!("fuck you"),
-        }
+        let (dt, value) = self.process_expr(&alloca_name, &vs.value, false, 0);
+        let load_name = self.get_load_name(&vs.name, vs.id);
+        self.push(&format!("    store {} {}, ptr {}", dt, value, alloca_name));
+        self.push(&format!(
+            "    {} = load {}, ptr {}\n",
+            load_name, dt, alloca_name
+        ));
     }
 
-    // NOTE: don't forget to use `load` variable name
-    fn process_expr(&mut self, expr: &Expr, is_ptr: bool) -> String {
+    /// (DataType, Value)
+    fn process_expr(
+        &mut self,
+        name: &str,
+        expr: &Expr,
+        is_ptr: bool,
+        counter: usize,
+    ) -> (String, String) {
         match expr {
-            Expr::Int32(value) => format!("i32 {}", value),
+            Expr::Int32(value) => return ("i32".to_string(), value.to_string()),
             Expr::String(_) => todo!(),
             Expr::Ident(expr) => {
                 let name = self.get_load_name(&expr.name, expr.id);
                 let dt = self.get_ir_type(expr.data_type.unwrap());
-                return format!("{} {}", dt, name);
+                return (dt.to_string(), name);
             }
 
-            Expr::BinaryExpr(_) => todo!(),
+            Expr::BinaryExpr(expr) => {
+                let result = self.process_binary_expr(name, expr, is_ptr, counter);
+                return result;
+            }
             Expr::Empty => todo!(),
         }
     }
 
-    fn process_assign_stmt(&mut self, stmt: &AssignStmt) {
+    fn process_binary_expr(
+        &mut self,
+        name: &str,
+        expr: &Box<BinaryExpr>,
+        _is_ptr: bool,
+        counter: usize,
+    ) -> (String, String) {
+        let op = self.get_op_type(expr.op);
+        let lhs = self.process_expr(name, &expr.left, false, counter + 1);
+        let rhs = self.process_expr(name, &expr.right, false, counter + 1);
+
+        let temp = self.temp_name(name, op);
+        self.push(format!("    {} = {} {} {}, {}", temp, op, lhs.0, lhs.1, rhs.1).as_str());
+
+        return (lhs.0, temp);
+    }
+
+    fn process_assign_stmt(&mut self, _stmt: &AssignStmt) {
         todo!()
     }
 
@@ -118,5 +145,21 @@ impl<'i> IrGen<'i> {
             DataType::CharPtr => "char*",
             DataType::Void => "void",
         }
+    }
+
+    fn get_op_type(&self, op: BinaryOp) -> &'i str {
+        match op {
+            BinaryOp::Add => "add",
+            BinaryOp::Sub => "sub",
+            BinaryOp::Mul => "mul",
+            BinaryOp::Div => "sdiv",
+            BinaryOp::Modulo => "srem",
+        }
+    }
+
+    fn temp_name(&mut self, prefix: &str, op: &str) -> String {
+        let n = self.counter;
+        self.counter += 1;
+        format!("{}_{}_{}", prefix, op, n)
     }
 }
