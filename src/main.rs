@@ -7,7 +7,7 @@ mod semantic;
 mod token;
 mod types;
 
-use std::fs;
+use std::{fs, process::exit};
 
 use crate::{ir::IrGen, lexer::Lexer, parser::Parser, semantic::Semantic};
 
@@ -24,7 +24,7 @@ fn main() {
     let mut sym = Semantic::new();
     let has_err = sym.analyze(&mut parser.ast);
     if has_err {
-        return;
+        exit(1);
     }
 
     // parser.print();
