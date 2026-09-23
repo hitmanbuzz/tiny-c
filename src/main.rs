@@ -7,7 +7,7 @@ mod semantic;
 mod token;
 mod types;
 
-use std::fs;
+use std::{fs, process::exit};
 
 use crate::{ir::IrGen, lexer::Lexer, parser::Parser, semantic::Semantic};
 
@@ -22,7 +22,10 @@ fn main() {
     parser.parse();
 
     let mut sym = Semantic::new();
-    sym.analyze(&mut parser.ast);
+    let has_err = sym.analyze(&mut parser.ast);
+    if has_err {
+        exit(1);
+    }
 
     // parser.print();
 
@@ -31,5 +34,5 @@ fn main() {
     ir.gen_ir();
     let ir_source = ir.get_ir();
 
-    fs::write("output.ll", ir_source).unwrap();
+    fs::write("tests/output.ll", ir_source).unwrap();
 }

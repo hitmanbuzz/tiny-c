@@ -5,7 +5,7 @@ use crate::{
     types::DataType,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct ScopeData {
     id: Option<usize>,
     data_type: DataType,
@@ -17,6 +17,7 @@ impl ScopeData {
     }
 }
 
+#[derive(Debug)]
 pub struct Semantic {
     scopes: Vec<HashMap<String, ScopeData>>,
     id_counter: usize,
@@ -30,7 +31,8 @@ impl Semantic {
         }
     }
 
-    pub fn analyze(&mut self, ast: &mut Ast) {
+    pub fn analyze(&mut self, ast: &mut Ast) -> bool {
+        let mut has_err = false;
         // global scope
         self.entry_scope();
 
@@ -42,10 +44,12 @@ impl Semantic {
 
             if let Err(e) = result {
                 eprintln!("[SEMANTIC ERROR]: {}", e);
+                has_err = true;
             }
         }
 
         self.exit_scope();
+        return has_err;
     }
 
     fn analyze_fn(&mut self, fd: &mut FunctionDef) -> Result<(), String> {
@@ -74,7 +78,8 @@ impl Semantic {
 
     fn analyze_var(&mut self, vs: &mut VarStmt, is_global: bool) -> Result<(), String> {
         let scope = self.get_scope_data(&mut vs.value)?;
-        if vs.data_type != scope.data_type {
+
+        if vs.data_type != scope.data_type && scope.data_type != DataType::Void {
             return Err(format!(
                 "incompatible var data type and var expr type: '{:?}' != '{:?}'",
                 vs.data_type, scope.data_type,
@@ -89,8 +94,7 @@ impl Semantic {
 
     fn analyze_assign(&mut self, stmt: &mut AssignStmt) -> Result<(), String> {
         let target_scope = self.get_scope_data(&mut stmt.target)?;
-        let value_scope = self.get_scope_data(&mut stmt.target)?;
-
+        let value_scope = self.get_scope_data(&mut stmt.value)?;
         if target_scope.data_type != value_scope.data_type {
             return Err(format!(
                 "incompatible asssign (value) data type with the target data type: '{:?}' != '{:?}'",
@@ -101,7 +105,7 @@ impl Semantic {
         Ok(())
     }
 
-    fn get_scope_data(&self, expr: &mut Expr) -> Result<ScopeData, String> {
+    fn get_scope_data(&mut self, expr: &mut Expr) -> Result<ScopeData, String> {
         match expr {
             Expr::Int32(_) => Ok(ScopeData::new(None, DataType::Int)),
             Expr::String(_) => Ok(ScopeData::new(None, DataType::CharPtr)),
@@ -126,7 +130,9 @@ impl Semantic {
 
                 Ok(left_scope)
             }
-            Expr::Empty => Ok(ScopeData::new(None, DataType::Void)),
+            Expr::Empty => {
+                return Ok(ScopeData::new(None, DataType::Void));
+            }
         }
     }
 
