@@ -49,7 +49,7 @@ impl<'i> IrGen<'i> {
         for stmt in fd.body.stmts.iter() {
             match stmt {
                 Stmt::Return(expr) => {
-                    let (dt, value) = self.process_expr("", expr, false, 0);
+                    let (dt, value) = self.process_expr("", expr, 0);
                     self.push(format!("    ret {} {}", dt, value).as_str());
                 }
                 Stmt::Var(vs) => self.process_vs(vs),
@@ -67,7 +67,7 @@ impl<'i> IrGen<'i> {
 
         self.push(&format!("    {} = alloca {}", alloca_name, alloca_dt));
 
-        let (dt, value) = self.process_expr(&alloca_name, &vs.value, false, 0);
+        let (dt, value) = self.process_expr(&alloca_name, &vs.value, 0);
         let load_name = self.get_load_name(&vs.name, vs.id);
         self.push(&format!("    store {} {}, ptr {}", dt, value, alloca_name));
         self.push(&format!(
@@ -77,13 +77,7 @@ impl<'i> IrGen<'i> {
     }
 
     /// (DataType, Value)
-    fn process_expr(
-        &mut self,
-        name: &str,
-        expr: &Expr,
-        is_ptr: bool,
-        counter: usize,
-    ) -> (String, String) {
+    fn process_expr(&mut self, name: &str, expr: &Expr, counter: usize) -> (String, String) {
         match expr {
             Expr::Int32(value) => return ("i32".to_string(), value.to_string()),
             Expr::String(_) => todo!(),
@@ -94,7 +88,7 @@ impl<'i> IrGen<'i> {
             }
 
             Expr::BinaryExpr(expr) => {
-                let result = self.process_binary_expr(name, expr, is_ptr, counter);
+                let result = self.process_binary_expr(name, expr, counter);
                 return result;
             }
             Expr::Empty => todo!(),
@@ -105,12 +99,11 @@ impl<'i> IrGen<'i> {
         &mut self,
         name: &str,
         expr: &Box<BinaryExpr>,
-        _is_ptr: bool,
         counter: usize,
     ) -> (String, String) {
         let op = self.get_op_type(expr.op);
-        let lhs = self.process_expr(name, &expr.left, false, counter + 1);
-        let rhs = self.process_expr(name, &expr.right, false, counter + 1);
+        let lhs = self.process_expr(name, &expr.left, counter + 1);
+        let rhs = self.process_expr(name, &expr.right, counter + 1);
 
         let temp = self.temp_name(name, op);
         self.push(format!("    {} = {} {} {}, {}", temp, op, lhs.0, lhs.1, rhs.1).as_str());
