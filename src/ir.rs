@@ -141,9 +141,9 @@ impl<'i> IrGen<'i> {
             let alloca_name = self.get_alloca_name(&expr.name, expr.id);
 
             // FIX: try to fix this damn clone thing
+            let (dt, value) = self.process_expr(&alloca_name, &stmt.value, 0);
             self.update_register(alloca_name.clone());
             let load_name = self.get_load_name(&expr.name, expr.id);
-            let (dt, value) = self.process_expr(&alloca_name, &stmt.value, 0);
 
             self.push(format!("    store {} {}, ptr {}", dt, value, alloca_name).as_str());
             self.push(format!("    {} = load {}, ptr {}", load_name, dt, alloca_name).as_str());
