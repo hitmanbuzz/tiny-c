@@ -16,13 +16,3 @@ pub enum DataType {
 pub enum Keyword {
     Return,
 }
-
-pub fn get_ident_type(ident: &str) -> Option<IdentType> {
-    match ident {
-        "int" => Some(IdentType::DataType(DataType::Int)),
-        "void" => Some(IdentType::DataType(DataType::Void)),
-        "char*" => Some(IdentType::DataType(DataType::CharPtr)),
-        "return" => Some(IdentType::Keyword(Keyword::Return)),
-        _ => None,
-    }
-}

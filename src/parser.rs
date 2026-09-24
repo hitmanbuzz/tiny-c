@@ -3,7 +3,7 @@ use std::{iter::Peekable, vec::IntoIter};
 use crate::{
     ast::{AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, Stmt, VarStmt},
     token::{Token, TokenData},
-    types::{DataType, IdentType, Keyword, get_ident_type},
+    types::{DataType, IdentType, Keyword},
 };
 
 pub struct Parser {
@@ -386,7 +386,13 @@ impl Parser {
     }
 
     fn get_ident(&self, ident: &str) -> Option<IdentType> {
-        get_ident_type(ident)
+        match ident {
+            "int" => Some(IdentType::DataType(DataType::Int)),
+            "void" => Some(IdentType::DataType(DataType::Void)),
+            "char*" => Some(IdentType::DataType(DataType::CharPtr)),
+            "return" => Some(IdentType::Keyword(Keyword::Return)),
+            _ => None,
+        }
     }
 }
 
