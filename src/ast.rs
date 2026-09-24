@@ -13,7 +13,6 @@ pub enum Decl {
     Var(VarStmt),
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Stmt {
     Return(Expr),
@@ -37,7 +36,6 @@ pub enum Expr {
     Empty,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FunctionDef {
     pub return_type: DataType,
@@ -46,7 +44,6 @@ pub struct FunctionDef {
     pub body: Block,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Param {
     pub name: String,
