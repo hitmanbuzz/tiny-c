@@ -1,4 +1,7 @@
 int main() {
-	int x = 5 < 5;
+	int x = 5 + 5;
+	if x % 2 == 0 {
+		return 1;
+	}
 	return x;
 }

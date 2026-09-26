@@ -68,7 +68,7 @@ impl<'i> IrGen<'i> {
                 }
                 Stmt::Var(vs) => self.process_vs(vs),
                 Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
-                Stmt::IfStmt(if_stmt) => todo!(),
+                Stmt::IfStmt(stmt) => todo!(),
             }
         }
 

@@ -457,7 +457,16 @@ impl Parser {
                 | Token::And
                 | Token::Or
                 | Token::Less
-                | Token::Greater => {
+                | Token::Greater
+                | Token::LessEqual
+                | Token::GreaterEqual
+                | Token::EqualEqual
+                | Token::NotEqual
+                | Token::BitAnd
+                | Token::BitOr
+                | Token::BitXor
+                | Token::BitLS
+                | Token::BitRS => {
                     let (lbp, rbp, op) = self.peek().token.bin_op().ok_or_else(|| ParseError {
                         msg: format!("expected `Operator` but found: {:?}", self.peek().token),
                         line: self.peek().line,

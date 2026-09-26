@@ -52,6 +52,8 @@ impl<'l> Lexer<'l> {
                 '?' => self.add_token(Token::Question, c.0),
                 ':' => self.add_token(Token::Colon, c.0),
                 ';' => self.add_token(Token::SemiColon, c.0),
+                '^' => self.add_token(Token::BitXor, c.0),
+                '~' => self.add_token(Token::BitNot, c.0),
                 '*' => {
                     if let Some(&next) = self.source.peek() {
                         if next.1 == '*' {

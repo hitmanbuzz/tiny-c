@@ -57,23 +57,29 @@ impl Semantic {
         self.entry_scope();
 
         for stmt in fd.body.stmts.iter_mut() {
-            match stmt {
-                Stmt::Return(expr) => {
-                    let scope = self.get_scope_data(expr)?;
-                    if fd.return_type != scope.data_type {
-                        return Err(format!(
-                            "incompatible function return type and return stmt expr type: '{:?}' != '{:?}'",
-                            fd.return_type, scope.data_type,
-                        ));
-                    }
-                }
-                Stmt::Var(stmt) => self.analyze_var(stmt, false)?,
-                Stmt::Assign(stmt) => self.analyze_assign(stmt)?,
-                Stmt::IfStmt(stmt) => self.analyze_if_stmt(stmt)?,
-            }
+            self.analyze_stmt(stmt, fd.return_type)?;
         }
 
         self.exit_scope();
+        Ok(())
+    }
+
+    // fd_type: function definition return type
+    fn analyze_stmt(&mut self, stmt: &mut Stmt, fd_type: DataType) -> Result<(), String> {
+        match stmt {
+            Stmt::Var(stmt) => self.analyze_var(stmt, false)?,
+            Stmt::Assign(stmt) => self.analyze_assign(stmt)?,
+            Stmt::IfStmt(stmt) => self.analyze_if_stmt(stmt, fd_type)?,
+            Stmt::Return(expr) => {
+                let scope = self.get_scope_data(expr)?;
+                if fd_type != scope.data_type {
+                    return Err(format!(
+                        "incompatible function return type and return stmt expr type: '{:?}' != '{:?}'",
+                        fd_type, scope.data_type,
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -106,8 +112,16 @@ impl Semantic {
         Ok(())
     }
 
-    fn analyze_if_stmt(&mut self, stmt: &mut IfStmt) -> Result<(), String> {
-        todo!()
+    // fd_type: function definition return type
+    fn analyze_if_stmt(&mut self, stmt: &mut IfStmt, fd_type: DataType) -> Result<(), String> {
+        for branch in stmt.branches.iter_mut() {
+            self.analyze_expr(&mut branch.cond_expr)?;
+            for stmt in branch.body.stmts.iter_mut() {
+                self.analyze_stmt(stmt, fd_type)?;
+            }
+        }
+
+        Ok(())
     }
 
     fn analyze_expr(&mut self, expr: &mut Expr) -> Result<ExprData, String> {
@@ -160,7 +174,12 @@ impl Semantic {
             }
 
             // relational
-            BinaryOp::Less | BinaryOp::Greater | BinaryOp::LessEqual | BinaryOp::GreaterEqual => {
+            BinaryOp::Less
+            | BinaryOp::Greater
+            | BinaryOp::LessEqual
+            | BinaryOp::GreaterEqual
+            | BinaryOp::EqualEqual
+            | BinaryOp::NotEqual => {
                 if lhs == rhs {
                     Ok(DataType::Bool)
                 } else {
@@ -172,16 +191,16 @@ impl Semantic {
             }
 
             // equality (relational)
-            BinaryOp::EqualEqual | BinaryOp::NotEqual => {
-                if lhs == rhs {
-                    Ok(DataType::Bool)
-                } else {
-                    Err(format!(
-                        "LHS and RHS data type are not equal: LHS({:?}) != RHS({:?})",
-                        lhs, rhs
-                    ))
-                }
-            }
+            // BinaryOp::EqualEqual | BinaryOp::NotEqual => {
+            //     if lhs == rhs {
+            //         Ok(DataType::Bool)
+            //     } else {
+            //         Err(format!(
+            //             "LHS and RHS data type are not equal: LHS({:?}) != RHS({:?})",
+            //             lhs, rhs
+            //         ))
+            //     }
+            // }
 
             // logical
             BinaryOp::And | BinaryOp::Or => {

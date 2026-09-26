@@ -16,7 +16,7 @@ fn main() {
 
     let mut lexer = Lexer::new(source);
     lexer.tokenize();
-    // lexer.print();
+    lexer.print();
 
     let mut parser = Parser::new(lexer.tokens);
     parser.parse();
@@ -30,9 +30,9 @@ fn main() {
     parser.print();
 
     // it will generate LLVM IR code
-    // let mut ir = IrGen::new(&parser.ast);
-    // ir.gen_ir();
-    // let ir_source = ir.get_ir();
+    let mut ir = IrGen::new(&parser.ast);
+    ir.gen_ir();
+    let ir_source = ir.get_ir();
 
-    // fs::write("tests/output.ll", ir_source).unwrap();
+    fs::write("tests/output.ll", ir_source).unwrap();
 }
