@@ -1,17 +1,17 @@
 use std::collections::{HashMap, hash_map::Entry};
 
 use crate::{
-    ast::{AssignStmt, Ast, Decl, Expr, FunctionDef, IfStmt, Stmt, VarStmt},
+    ast::{AssignStmt, Ast, BinaryOp, Decl, Expr, FunctionDef, IfStmt, Stmt, VarStmt},
     types::DataType,
 };
 
 #[derive(Debug, Clone, Copy)]
-struct ScopeData {
+struct ExprData {
     id: Option<usize>,
     data_type: DataType,
 }
 
-impl ScopeData {
+impl ExprData {
     fn new(id: Option<usize>, data_type: DataType) -> Self {
         Self { id, data_type }
     }
@@ -19,7 +19,7 @@ impl ScopeData {
 
 #[derive(Debug)]
 pub struct Semantic {
-    scopes: Vec<HashMap<String, ScopeData>>,
+    scopes: Vec<HashMap<String, ExprData>>,
     id_counter: usize,
 }
 
@@ -78,7 +78,7 @@ impl Semantic {
     }
 
     fn analyze_var(&mut self, vs: &mut VarStmt, is_global: bool) -> Result<(), String> {
-        let scope = self.get_scope_data(&mut vs.value)?;
+        let scope = self.analyze_expr(&mut vs.value)?;
 
         if vs.data_type != scope.data_type && scope.data_type != DataType::Void {
             return Err(format!(
@@ -110,10 +110,121 @@ impl Semantic {
         todo!()
     }
 
-    fn get_scope_data(&mut self, expr: &mut Expr) -> Result<ScopeData, String> {
+    fn analyze_expr(&mut self, expr: &mut Expr) -> Result<ExprData, String> {
         match expr {
-            Expr::Int32(_) => Ok(ScopeData::new(None, DataType::Int)),
-            Expr::String(_) => Ok(ScopeData::new(None, DataType::CharPtr)),
+            Expr::Int32(_) => Ok(ExprData::new(None, DataType::Int32)),
+            Expr::String(_) => Ok(ExprData::new(None, DataType::String)),
+
+            Expr::Ident(expr) => {
+                let scope = self
+                    .lookup(&expr.name)
+                    .ok_or_else(|| format!("use of undeclared identifier: '{}'", expr.name))?;
+
+                expr.id = scope.id;
+                expr.data_type = Some(scope.data_type);
+                Ok(scope)
+            }
+
+            Expr::BinaryExpr(expr) => {
+                let lhs = self.analyze_expr(&mut expr.left)?;
+                let rhs = self.analyze_expr(&mut expr.right)?;
+                let result_type =
+                    self.analyze_binary_expr(expr.op, lhs.data_type, rhs.data_type)?;
+
+                Ok(ExprData::new(None, result_type))
+            }
+
+            // FIX: remove `Empty` type from Expr and use instead Option<T> where `T` is expr
+            Expr::Empty => Ok(ExprData::new(None, DataType::Void)),
+        }
+    }
+
+    /// NOTE: the error is kinda plain and does't contain much info but I am too lazy to fix that
+    fn analyze_binary_expr(
+        &self,
+        op: BinaryOp,
+        lhs: DataType,
+        rhs: DataType,
+    ) -> Result<DataType, String> {
+        match op {
+            // arithmetic
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Modulo => {
+                if lhs == DataType::Int32 && rhs == DataType::Int32 {
+                    Ok(DataType::Int32)
+                } else {
+                    Err(format!(
+                        "operator {:?} requires both operands to be Int32, found LHS({:?}) and RHS({:?})",
+                        op, lhs, rhs
+                    ))
+                }
+            }
+
+            // relational
+            BinaryOp::Less | BinaryOp::Greater | BinaryOp::LessEqual | BinaryOp::GreaterEqual => {
+                if lhs == rhs {
+                    Ok(DataType::Bool)
+                } else {
+                    Err(format!(
+                        "LHS and RHS data type are not equal: LHS({:?}) != RHS({:?})",
+                        lhs, rhs
+                    ))
+                }
+            }
+
+            // equality (relational)
+            BinaryOp::EqualEqual | BinaryOp::NotEqual => {
+                if lhs == rhs {
+                    Ok(DataType::Bool)
+                } else {
+                    Err(format!(
+                        "LHS and RHS data type are not equal: LHS({:?}) != RHS({:?})",
+                        lhs, rhs
+                    ))
+                }
+            }
+
+            // logical
+            BinaryOp::And | BinaryOp::Or => {
+                if lhs == DataType::Bool && rhs == DataType::Bool {
+                    Ok(DataType::Bool)
+                } else {
+                    Err(format!(
+                        "operator {:?} requires both operands to be Bool, found LHS({:?}) and RHS({:?})",
+                        op, lhs, rhs
+                    ))
+                }
+            }
+
+            // bitwise
+            BinaryOp::BitOr | BinaryOp::BitAnd | BinaryOp::BitXor => {
+                if lhs == DataType::Int32 && rhs == DataType::Int32 {
+                    Ok(DataType::Int32)
+                } else {
+                    Err(format!(
+                        "operator {:?} requires both operands to be Int32, found LHS({:?}) and RHS({:?})",
+                        op, lhs, rhs
+                    ))
+                }
+            }
+
+            // bit shifts
+            BinaryOp::BitLS | BinaryOp::BitRS => {
+                if lhs == DataType::Int32 && rhs == DataType::Int32 {
+                    Ok(DataType::Int32)
+                } else {
+                    Err(format!(
+                        "operator {:?} requires both operands to be Int32, found LHS({:?}) and RHS({:?})",
+                        op, lhs, rhs
+                    ))
+                }
+            }
+        }
+    }
+
+    fn get_scope_data(&mut self, expr: &mut Expr) -> Result<ExprData, String> {
+        match expr {
+            Expr::Int32(_) => Ok(ExprData::new(None, DataType::Int32)),
+            Expr::String(_) => Ok(ExprData::new(None, DataType::String)),
             Expr::Ident(expr) => {
                 let scope = self
                     .lookup(&expr.name)
@@ -136,7 +247,7 @@ impl Semantic {
                 Ok(left_scope)
             }
             Expr::Empty => {
-                return Ok(ScopeData::new(None, DataType::Void));
+                return Ok(ExprData::new(None, DataType::Void));
             }
         }
     }
@@ -148,13 +259,13 @@ impl Semantic {
             Entry::Vacant(entry) => {
                 let id = self.id_counter;
                 self.id_counter += 1;
-                entry.insert(ScopeData::new(Some(id), data_type));
+                entry.insert(ExprData::new(Some(id), data_type));
                 Ok(id)
             }
         }
     }
 
-    fn lookup(&self, name: &str) -> Option<ScopeData> {
+    fn lookup(&self, name: &str) -> Option<ExprData> {
         for scope in self.scopes.iter().rev() {
             if let Some(s) = scope.get(name) {
                 return Some(*s);

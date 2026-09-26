@@ -174,9 +174,10 @@ impl<'i> IrGen<'i> {
 
     fn get_ir_type(&self, dt: DataType) -> &'i str {
         match dt {
-            DataType::Int => "i32",
-            DataType::CharPtr => "char*",
+            DataType::Int32 => "i32",
+            DataType::String => "string",
             DataType::Void => "void",
+            DataType::Bool => todo!(),
         }
     }
 
@@ -191,6 +192,15 @@ impl<'i> IrGen<'i> {
             BinaryOp::Greater => todo!(),
             BinaryOp::And => todo!(),
             BinaryOp::Or => todo!(),
+            BinaryOp::LessEqual => todo!(),
+            BinaryOp::NotEqual => todo!(),
+            BinaryOp::GreaterEqual => todo!(),
+            BinaryOp::BitOr => todo!(),
+            BinaryOp::BitAnd => todo!(),
+            BinaryOp::BitXor => todo!(),
+            BinaryOp::BitLS => todo!(),
+            BinaryOp::BitRS => todo!(),
+            BinaryOp::EqualEqual => todo!(),
         }
     }
 

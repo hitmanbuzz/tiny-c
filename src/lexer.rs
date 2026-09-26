@@ -64,8 +64,34 @@ impl<'l> Lexer<'l> {
                         self.add_token(Token::Star, c.0);
                     }
                 }
-                '<' => self.add_token(Token::Less, c.0),
-                '>' => self.add_token(Token::Greater, c.0),
+                '<' => {
+                    if let Some(&next) = self.source.peek() {
+                        if next.1 == '=' {
+                            self.source.next();
+                            self.add_token(Token::LessEqual, c.0);
+                        } else if next.1 == '<' {
+                            self.add_token(Token::BitLS, c.0);
+                        } else {
+                            self.add_token(Token::Less, c.0);
+                        }
+                    } else {
+                        self.add_token(Token::Less, c.0);
+                    }
+                }
+                '>' => {
+                    if let Some(&next) = self.source.peek() {
+                        if next.1 == '=' {
+                            self.source.next();
+                            self.add_token(Token::GreaterEqual, c.0);
+                        } else if next.1 == '<' {
+                            self.add_token(Token::BitRS, c.0);
+                        } else {
+                            self.add_token(Token::Greater, c.0);
+                        }
+                    } else {
+                        self.add_token(Token::Greater, c.0);
+                    }
+                }
                 '&' => {
                     if let Some(&next) = self.source.peek() {
                         if next.1 == '&' {
@@ -88,6 +114,18 @@ impl<'l> Lexer<'l> {
                         }
                     } else {
                         self.add_token(Token::BitOr, c.0);
+                    }
+                }
+                '!' => {
+                    if let Some(&next) = self.source.peek() {
+                        if next.1 == '=' {
+                            self.source.next();
+                            self.add_token(Token::NotEqual, next.0);
+                        } else {
+                            self.add_token(Token::Not, c.0);
+                        }
+                    } else {
+                        self.add_token(Token::Not, c.0);
                     }
                 }
                 '/' => {

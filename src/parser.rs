@@ -503,9 +503,9 @@ impl Parser {
 
     fn get_ident_type(&self, ident: &str) -> Option<IdentType> {
         match ident {
-            "int" => Some(IdentType::DataType(DataType::Int)),
+            "int" => Some(IdentType::DataType(DataType::Int32)),
             "void" => Some(IdentType::DataType(DataType::Void)),
-            "char*" => Some(IdentType::DataType(DataType::CharPtr)),
+            "string" => Some(IdentType::DataType(DataType::String)),
             "return" => Some(IdentType::Keyword(Keyword::Return)),
             "if" => Some(IdentType::Keyword(Keyword::If)),
             "else" => Some(IdentType::Keyword(Keyword::Else)),
@@ -568,7 +568,7 @@ mod tests {
                 body: Block {
                     stmts: vec![Stmt::Return(Expr::Int32(69))],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 
@@ -629,7 +629,7 @@ mod tests {
                 body: Block {
                     stmts: vec![
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: String::from("a"),
                             value: Expr::Int32(67),
                             id: None,
@@ -638,7 +638,7 @@ mod tests {
                         Stmt::Return(Expr::Int32(69)),
                     ],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 
@@ -705,7 +705,7 @@ mod tests {
                 body: Block {
                     stmts: vec![
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: String::from("x"),
                             value: Expr::Int32(69),
                             id: None,
@@ -726,7 +726,7 @@ mod tests {
                         })),
                     ],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 
@@ -803,7 +803,7 @@ mod tests {
                 body: Block {
                     stmts: vec![
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: "a".to_string(),
 
                             // 1 * (2 + 3)
@@ -820,7 +820,7 @@ mod tests {
                             is_global: false,
                         }),
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: "b".to_string(),
                             value: Expr::BinaryExpr(Box::new(BinaryExpr {
                                 left: Expr::BinaryExpr(Box::new(BinaryExpr {
@@ -852,7 +852,7 @@ mod tests {
                         }),
                     ],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 

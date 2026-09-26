@@ -21,11 +21,11 @@ fn main() {
     let mut parser = Parser::new(lexer.tokens);
     parser.parse();
 
-    // let mut sym = Semantic::new();
-    // let has_err = sym.analyze(&mut parser.ast);
-    // if has_err {
-    //     exit(1);
-    // }
+    let mut sym = Semantic::new();
+    let has_err = sym.analyze(&mut parser.ast);
+    if has_err {
+        exit(1);
+    }
 
     parser.print();
 
