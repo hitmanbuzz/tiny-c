@@ -1,6 +1,7 @@
 int main() {
-	int x = 1;
-	x = x + 2;
-	x = x * 2 + 5;
+	int x = 5;
+	if x > 2 + 1 {
+		return 1;
+	}
 	return x;
 }

@@ -68,6 +68,7 @@ impl<'i> IrGen<'i> {
                 }
                 Stmt::Var(vs) => self.process_vs(vs),
                 Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
+                Stmt::IfStmt(if_stmt) => todo!(),
             }
         }
 
@@ -186,6 +187,10 @@ impl<'i> IrGen<'i> {
             BinaryOp::Mul => "mul",
             BinaryOp::Div => "sdiv",
             BinaryOp::Modulo => "srem",
+            BinaryOp::Less => todo!(),
+            BinaryOp::Greater => todo!(),
+            BinaryOp::And => todo!(),
+            BinaryOp::Or => todo!(),
         }
     }
 

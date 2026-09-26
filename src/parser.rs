@@ -1,8 +1,14 @@
 use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
-    ast::{AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, Stmt, VarStmt},
-    token::{Token, TokenData},
+    ast::{
+        AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, IfBranch, IfStmt,
+        Stmt, VarStmt,
+    },
+    token::{
+        Token::{self, Identifier},
+        TokenData,
+    },
     types::{DataType, IdentType, Keyword},
 };
 
@@ -54,7 +60,7 @@ impl Parser {
             }
         };
 
-        let ident_type = self.get_ident(&ident).ok_or_else(|| ParseError {
+        let ident_type = self.get_ident_type(&ident).ok_or_else(|| ParseError {
             msg: format!(
                 "conversion of `Identifier ({})` to its distinct type is not implemented",
                 ident,
@@ -208,7 +214,7 @@ impl Parser {
         let curr = self.next();
         let stmt = match curr.token {
             Token::Identifier(str) => {
-                if let Some(ident_type) = self.get_ident(&str) {
+                if let Some(ident_type) = self.get_ident_type(&str) {
                     match ident_type {
                         IdentType::DataType(data_type) => {
                             let node = self.parse_node_type(data_type)?;
@@ -223,6 +229,16 @@ impl Parser {
                         }
                         IdentType::Keyword(keyword) => match keyword {
                             Keyword::Return => self.parse_return_stmt(),
+                            Keyword::If => self.parse_if_stmt(),
+                            Keyword::Else => {
+                                return Err(ParseError {
+                                    msg: format!(
+                                        "unexpected else stmt declration before a if stmt"
+                                    ),
+                                    line: curr.line,
+                                    pos: curr.pos,
+                                });
+                            }
                         },
                     }
                 } else {
@@ -238,6 +254,98 @@ impl Parser {
             }
         };
         return stmt;
+    }
+
+    fn parse_if_stmt(&mut self) -> Result<Stmt, ParseError> {
+        let mut stmt = IfStmt {
+            branches: Vec::new(),
+            else_stmt: None,
+        };
+
+        stmt.branches.push(self.parse_if_stmt_branch()?);
+
+        loop {
+            if !self.is_keyword("else") {
+                break;
+            }
+
+            self.next();
+
+            if self.is_keyword("if") {
+                self.next();
+                stmt.branches.push(self.parse_if_stmt_branch()?);
+            } else {
+                stmt.else_stmt = Some(self.parse_else_stmt()?);
+                break;
+            }
+        }
+
+        return Ok(Stmt::IfStmt(stmt));
+    }
+
+    fn parse_else_stmt(&mut self) -> Result<Block, ParseError> {
+        let mut curr = self.next();
+        if curr.token != Token::LeftCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `LeftCurlyBr` after else keyword but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        let body = self.parse_block()?;
+
+        curr = self.next();
+        if curr.token != Token::RightCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `RightCurlyBr` after the end of else body block but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        return Ok(Block { stmts: body.stmts });
+    }
+
+    fn parse_if_stmt_branch(&mut self) -> Result<IfBranch, ParseError> {
+        let expr = self.parse_expr(0.0)?;
+
+        let mut curr = self.next();
+        if curr.token != Token::LeftCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `LeftCurlyBr` before the start of if_stmt block but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        let body = self.parse_block()?;
+
+        curr = self.next();
+        if curr.token != Token::RightCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `RightCurlyBr` at the end of if_stmt block but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        return Ok(IfBranch {
+            cond_expr: expr,
+            body,
+        });
     }
 
     fn parse_assign_stmt(&mut self, target: &str) -> Result<Stmt, ParseError> {
@@ -297,10 +405,6 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, min_bp: f32) -> Result<Expr, ParseError> {
-        if self.peek().token == Token::SemiColon {
-            return Ok(Expr::Empty);
-        }
-
         let curr = self.next();
         let mut lhs = match curr.token {
             Token::String(str) => Expr::String(str),
@@ -344,8 +448,16 @@ impl Parser {
         loop {
             match self.peek().token {
                 // FIX: EOF should not break always (it can return error)
-                Token::SemiColon | Token::RightParen | Token::Eof => break,
-                Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash | Token::Modulo => {
+                Token::SemiColon | Token::RightParen | Token::LeftCurlyBr | Token::Eof => break,
+                Token::Plus
+                | Token::Minus
+                | Token::Star
+                | Token::ForwardSlash
+                | Token::Modulo
+                | Token::And
+                | Token::Or
+                | Token::Less
+                | Token::Greater => {
                     let (lbp, rbp, op) = self.peek().token.bin_op().ok_or_else(|| ParseError {
                         msg: format!("expected `Operator` but found: {:?}", self.peek().token),
                         line: self.peek().line,
@@ -385,12 +497,18 @@ impl Parser {
         return self.tokens.peek().unwrap_or(&TokenData::default()).clone();
     }
 
-    fn get_ident(&self, ident: &str) -> Option<IdentType> {
+    fn is_keyword(&mut self, keyword: &str) -> bool {
+        matches!(self.peek().token, Token::Identifier(name) if name == keyword)
+    }
+
+    fn get_ident_type(&self, ident: &str) -> Option<IdentType> {
         match ident {
             "int" => Some(IdentType::DataType(DataType::Int)),
             "void" => Some(IdentType::DataType(DataType::Void)),
             "char*" => Some(IdentType::DataType(DataType::CharPtr)),
             "return" => Some(IdentType::Keyword(Keyword::Return)),
+            "if" => Some(IdentType::Keyword(Keyword::If)),
+            "else" => Some(IdentType::Keyword(Keyword::Else)),
             _ => None,
         }
     }

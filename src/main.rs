@@ -21,18 +21,18 @@ fn main() {
     let mut parser = Parser::new(lexer.tokens);
     parser.parse();
 
-    let mut sym = Semantic::new();
-    let has_err = sym.analyze(&mut parser.ast);
-    if has_err {
-        exit(1);
-    }
+    // let mut sym = Semantic::new();
+    // let has_err = sym.analyze(&mut parser.ast);
+    // if has_err {
+    //     exit(1);
+    // }
 
-    // parser.print();
+    parser.print();
 
     // it will generate LLVM IR code
-    let mut ir = IrGen::new(&parser.ast);
-    ir.gen_ir();
-    let ir_source = ir.get_ir();
+    // let mut ir = IrGen::new(&parser.ast);
+    // ir.gen_ir();
+    // let ir_source = ir.get_ir();
 
-    fs::write("tests/output.ll", ir_source).unwrap();
+    // fs::write("tests/output.ll", ir_source).unwrap();
 }

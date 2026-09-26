@@ -1,7 +1,7 @@
 use std::collections::{HashMap, hash_map::Entry};
 
 use crate::{
-    ast::{AssignStmt, Ast, Decl, Expr, FunctionDef, Stmt, VarStmt},
+    ast::{AssignStmt, Ast, Decl, Expr, FunctionDef, IfStmt, Stmt, VarStmt},
     types::DataType,
 };
 
@@ -69,6 +69,7 @@ impl Semantic {
                 }
                 Stmt::Var(stmt) => self.analyze_var(stmt, false)?,
                 Stmt::Assign(stmt) => self.analyze_assign(stmt)?,
+                Stmt::IfStmt(stmt) => self.analyze_if_stmt(stmt)?,
             }
         }
 
@@ -103,6 +104,10 @@ impl Semantic {
         }
 
         Ok(())
+    }
+
+    fn analyze_if_stmt(&mut self, stmt: &mut IfStmt) -> Result<(), String> {
+        todo!()
     }
 
     fn get_scope_data(&mut self, expr: &mut Expr) -> Result<ScopeData, String> {

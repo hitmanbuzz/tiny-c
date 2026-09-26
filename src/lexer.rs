@@ -64,6 +64,32 @@ impl<'l> Lexer<'l> {
                         self.add_token(Token::Star, c.0);
                     }
                 }
+                '<' => self.add_token(Token::Less, c.0),
+                '>' => self.add_token(Token::Greater, c.0),
+                '&' => {
+                    if let Some(&next) = self.source.peek() {
+                        if next.1 == '&' {
+                            self.source.next();
+                            self.add_token(Token::And, next.0);
+                        } else {
+                            self.add_token(Token::BitAnd, c.0);
+                        }
+                    } else {
+                        self.add_token(Token::BitAnd, c.0);
+                    }
+                }
+                '|' => {
+                    if let Some(&next) = self.source.peek() {
+                        if next.1 == '|' {
+                            self.source.next();
+                            self.add_token(Token::Or, next.0);
+                        } else {
+                            self.add_token(Token::BitOr, c.0);
+                        }
+                    } else {
+                        self.add_token(Token::BitOr, c.0);
+                    }
+                }
                 '/' => {
                     if let Some(&next) = self.source.peek() {
                         if next.1 == '/' {

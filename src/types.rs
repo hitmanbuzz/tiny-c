@@ -12,7 +12,9 @@ pub enum DataType {
     Void,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keyword {
     Return,
+    If,
+    Else,
 }
