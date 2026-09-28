@@ -190,18 +190,6 @@ impl Semantic {
                 }
             }
 
-            // equality (relational)
-            // BinaryOp::EqualEqual | BinaryOp::NotEqual => {
-            //     if lhs == rhs {
-            //         Ok(DataType::Bool)
-            //     } else {
-            //         Err(format!(
-            //             "LHS and RHS data type are not equal: LHS({:?}) != RHS({:?})",
-            //             lhs, rhs
-            //         ))
-            //     }
-            // }
-
             // logical
             BinaryOp::And | BinaryOp::Or => {
                 if lhs == DataType::Bool && rhs == DataType::Bool {
