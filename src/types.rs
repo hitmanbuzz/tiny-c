@@ -1,7 +1,16 @@
-#[derive(Debug, Clone, Copy)]
-pub enum IdentType {
-    DataType(DataType),
-    Keyword(Keyword),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Keyword {
+    Int,
+    Bool,
+    String,
+    Void,
+
+    True,
+    False,
+
+    Return,
+    If,
+    Else,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -13,9 +22,15 @@ pub enum DataType {
     Void,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Keyword {
-    Return,
-    If,
-    Else,
+impl Keyword {
+    /// keyword -> datatype
+    pub fn get_data_type(&self) -> Option<DataType> {
+        match self {
+            Keyword::Int => Some(DataType::Int32),
+            Keyword::Bool => Some(DataType::Bool),
+            Keyword::String => Some(DataType::String),
+            Keyword::Void => Some(DataType::Void),
+            _ => None,
+        }
+    }
 }

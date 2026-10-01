@@ -128,6 +128,7 @@ impl Semantic {
         match expr {
             Expr::Int32(_) => Ok(ExprData::new(None, DataType::Int32)),
             Expr::String(_) => Ok(ExprData::new(None, DataType::String)),
+            Expr::Bool(_) => Ok(ExprData::new(None, DataType::Bool)),
 
             Expr::Ident(expr) => {
                 let scope = self
@@ -147,7 +148,6 @@ impl Semantic {
 
                 Ok(ExprData::new(None, result_type))
             }
-
             // FIX: remove `Empty` type from Expr and use instead Option<T> where `T` is expr
             Expr::Empty => Ok(ExprData::new(None, DataType::Void)),
         }
@@ -232,6 +232,7 @@ impl Semantic {
         match expr {
             Expr::Int32(_) => Ok(ExprData::new(None, DataType::Int32)),
             Expr::String(_) => Ok(ExprData::new(None, DataType::String)),
+            Expr::Bool(_) => Ok(ExprData::new(None, DataType::Bool)),
             Expr::Ident(expr) => {
                 let scope = self
                     .lookup(&expr.name)

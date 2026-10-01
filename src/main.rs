@@ -35,7 +35,7 @@ fn main() {
 
     let mut lexer = Lexer::new(&source);
     lexer.tokenize();
-    lexer.print();
+    // lexer.print();
 
     let mut parser = Parser::new(lexer.tokens);
     parser.parse();

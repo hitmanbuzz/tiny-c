@@ -32,6 +32,7 @@ pub struct IdentExpr {
 pub enum Expr {
     Int32(i32),
     String(String),
+    Bool(bool),
     Ident(IdentExpr),
     BinaryExpr(Box<BinaryExpr>),
     Empty,
@@ -330,6 +331,10 @@ fn fmt_expr(f: &mut Formatter<'_>, expr: &Expr, prefix: &str, last: bool) -> fmt
                 "{prefix}{branch}Ident: {}({:?}) - {:?}",
                 expr.name, expr.id, expr.data_type
             )?;
+        }
+
+        Expr::Bool(value) => {
+            writeln!(f, "{prefix}{branch}Bool: {}", value)?;
         }
 
         Expr::Empty => {

@@ -4,7 +4,7 @@ use crate::{
     ast::{
         AssignStmt, Ast, BinaryExpr, BinaryOp,
         Decl::{FuncDef, Var},
-        Expr, FunctionDef, Stmt, VarStmt,
+        Expr, FunctionDef, IfStmt, Stmt, VarStmt,
     },
     types::DataType,
 };
@@ -68,28 +68,28 @@ impl<'i> IrGen<'i> {
                 }
                 Stmt::Var(vs) => self.process_vs(vs),
                 Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
-                Stmt::IfStmt(stmt) => todo!(),
+                Stmt::IfStmt(stmt) => self.process_if_stmt(stmt),
             }
         }
 
         self.push("}");
     }
 
-    fn process_vs(&mut self, vs: &VarStmt) {
-        let alloca_dt = self.get_ir_type(vs.data_type);
-        let alloca_name = self.get_alloca_name(&vs.name, vs.id);
+    fn process_vs(&mut self, stmt: &VarStmt) {
+        let alloca_dt = self.get_ir_type(stmt.data_type);
+        let alloca_name = self.get_alloca_name(&stmt.name, stmt.id);
 
         // CLONE: try to fix this damn clone thing
         self.update_register(alloca_name.clone());
 
         self.push(&format!("    {} = alloca {}", alloca_name, alloca_dt));
 
-        let (dt, value) = self.process_expr(&alloca_name, &vs.value, 0);
+        let (dt, value) = self.process_expr(&alloca_name, &stmt.value, 0);
         if dt.is_empty() && value.is_empty() {
             return;
         }
 
-        let load_name = self.get_load_name(&vs.name, vs.id);
+        let load_name = self.get_load_name(&stmt.name, stmt.id);
         self.push(&format!("    store {} {}, ptr {}", dt, value, alloca_name));
         self.push(&format!(
             "    {} = load {}, ptr {}",
@@ -98,13 +98,18 @@ impl<'i> IrGen<'i> {
         self.update_register(alloca_name.clone());
     }
 
+    fn process_if_stmt(&mut self, stmt: &IfStmt) {
+        todo!()
+    }
+
     /// param (lhs alloca var name, rhs expr, counter for binary expr)
     ///
     /// return (DataType, Value/Register)
     fn process_expr(&mut self, name: &str, expr: &Expr, counter: usize) -> (String, String) {
         match expr {
-            Expr::Int32(value) => return ("i32".to_string(), value.to_string()),
+            Expr::Int32(value) => ("i32".to_string(), value.to_string()),
             Expr::String(_) => todo!(),
+            Expr::Bool(value) => ("i1".to_string(), value.to_string()),
             Expr::Ident(expr) => {
                 let name = self.get_load_name(&expr.name, expr.id);
                 let dt = self.get_ir_type(expr.data_type.unwrap());
@@ -172,12 +177,13 @@ impl<'i> IrGen<'i> {
         return format!("{}_value_{}", alloca_name, r.curr_c);
     }
 
+    // convert to LLVM IR data type
     fn get_ir_type(&self, dt: DataType) -> &'i str {
         match dt {
             DataType::Int32 => "i32",
             DataType::String => "string",
             DataType::Void => "void",
-            DataType::Bool => todo!(),
+            DataType::Bool => "i1",
         }
     }
 
@@ -188,8 +194,8 @@ impl<'i> IrGen<'i> {
             BinaryOp::Mul => "mul",
             BinaryOp::Div => "sdiv",
             BinaryOp::Modulo => "srem",
-            BinaryOp::Less => todo!(),
-            BinaryOp::Greater => todo!(),
+            BinaryOp::Less => "slt",
+            BinaryOp::Greater => "sgt",
             BinaryOp::And => todo!(),
             BinaryOp::Or => todo!(),
             BinaryOp::LessEqual => todo!(),

@@ -6,10 +6,10 @@ use crate::{
         Stmt, VarStmt,
     },
     token::{
-        Token::{self, Identifier},
+        Token::{self},
         TokenData,
     },
-    types::{DataType, IdentType, Keyword},
+    types::{DataType, Keyword},
 };
 
 pub struct Parser {
@@ -60,25 +60,22 @@ impl Parser {
             }
         };
 
-        let ident_type = self.get_ident_type(&ident).ok_or_else(|| ParseError {
+        let keyword = self.get_keyword(ident.as_str()).ok_or_else(|| ParseError {
+            msg: format!("expected keyword but found: `{}`", ident),
+            line: curr.line,
+            pos: curr.pos,
+        })?;
+
+        let data_type = keyword.get_data_type().ok_or_else(|| ParseError {
             msg: format!(
-                "conversion of `Identifier ({})` to its distinct type is not implemented",
-                ident,
+                "expected keyword data-type but found keyword: {:?}",
+                keyword
             ),
             line: curr.line,
             pos: curr.pos,
         })?;
 
-        match ident_type {
-            IdentType::DataType(data_type) => self.parse_node_type(data_type),
-            IdentType::Keyword(keyword) => {
-                return Err(ParseError {
-                    msg: format!("expected `DataType` but found: `Keyword ({:?})`", keyword),
-                    line: curr.line,
-                    pos: curr.pos,
-                });
-            }
-        }
+        return self.parse_node_type(data_type);
     }
 
     fn parse_node_type(&mut self, data_type: DataType) -> Result<Decl, ParseError> {
@@ -213,36 +210,40 @@ impl Parser {
     fn parse_stmt(&mut self) -> Result<Stmt, ParseError> {
         let curr = self.next();
         let stmt = match curr.token {
-            Token::Identifier(str) => {
-                if let Some(ident_type) = self.get_ident_type(&str) {
-                    match ident_type {
-                        IdentType::DataType(data_type) => {
-                            let node = self.parse_node_type(data_type)?;
-                            match node {
-                                Decl::FuncDef(f) => Err(ParseError {
-                                    msg: format!("unexpected function within a function: {:?}", f),
-                                    line: curr.line,
-                                    pos: curr.pos,
-                                }),
-                                Decl::Var(v) => Ok(Stmt::Var(v)),
-                            }
+            Token::Identifier(ident) => {
+                let Some(keyword) = self.get_keyword(&ident) else {
+                    return self.parse_assign_stmt(&ident);
+                };
+
+                match keyword {
+                    Keyword::Int | Keyword::Bool | Keyword::String | Keyword::Void => {
+                        // this is guarantee to work (hehehe)
+                        let data_type = keyword.get_data_type().unwrap();
+                        match self.parse_node_type(data_type)? {
+                            Decl::FuncDef(fd) => Err(ParseError {
+                                msg: format!("unexpected function within a function: {:?}", fd),
+                                line: curr.line,
+                                pos: curr.pos,
+                            }),
+                            Decl::Var(stmt) => Ok(Stmt::Var(stmt)),
                         }
-                        IdentType::Keyword(keyword) => match keyword {
-                            Keyword::Return => self.parse_return_stmt(),
-                            Keyword::If => self.parse_if_stmt(),
-                            Keyword::Else => {
-                                return Err(ParseError {
-                                    msg: format!(
-                                        "unexpected else stmt declration before a if stmt"
-                                    ),
-                                    line: curr.line,
-                                    pos: curr.pos,
-                                });
-                            }
-                        },
                     }
-                } else {
-                    return self.parse_assign_stmt(&str);
+                    Keyword::Return => self.parse_return_stmt(),
+                    Keyword::If => self.parse_if_stmt(),
+                    Keyword::Else => {
+                        return Err(ParseError {
+                            msg: format!("unexpected else stmt declration before a if stmt"),
+                            line: curr.line,
+                            pos: curr.pos,
+                        });
+                    }
+                    k => {
+                        return Err(ParseError {
+                            msg: format!("invalid keyword found at parse_stmt: {:?}", k),
+                            line: curr.line,
+                            pos: curr.pos,
+                        });
+                    }
                 }
             }
             t => {
@@ -408,11 +409,15 @@ impl Parser {
         let curr = self.next();
         let mut lhs = match curr.token {
             Token::String(str) => Expr::String(str),
-            Token::Identifier(str) => Expr::Ident(IdentExpr {
-                name: str,
-                id: None,
-                data_type: None,
-            }),
+            Token::Identifier(str) => match str.as_str() {
+                "true" => Expr::Bool(true),
+                "false" => Expr::Bool(false),
+                _ => Expr::Ident(IdentExpr {
+                    name: str,
+                    id: None,
+                    data_type: None,
+                }),
+            },
             Token::Number(str) => {
                 let num = str.parse::<i32>().map_err(|_| ParseError {
                     msg: format!("failed to parse `{}` to i32", str),
@@ -510,14 +515,18 @@ impl Parser {
         matches!(self.peek().token, Token::Identifier(name) if name == keyword)
     }
 
-    fn get_ident_type(&self, ident: &str) -> Option<IdentType> {
+    /// get keyword type from ident string
+    fn get_keyword(&self, ident: &str) -> Option<Keyword> {
         match ident {
-            "int" => Some(IdentType::DataType(DataType::Int32)),
-            "void" => Some(IdentType::DataType(DataType::Void)),
-            "string" => Some(IdentType::DataType(DataType::String)),
-            "return" => Some(IdentType::Keyword(Keyword::Return)),
-            "if" => Some(IdentType::Keyword(Keyword::If)),
-            "else" => Some(IdentType::Keyword(Keyword::Else)),
+            "int" => Some(Keyword::Int),
+            "void" => Some(Keyword::Void),
+            "string" => Some(Keyword::String),
+            "bool" => Some(Keyword::Bool),
+            "return" => Some(Keyword::Return),
+            "if" => Some(Keyword::If),
+            "else" => Some(Keyword::Else),
+            "true" => Some(Keyword::True),
+            "false" => Some(Keyword::False),
             _ => None,
         }
     }
