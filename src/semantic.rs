@@ -71,7 +71,7 @@ impl Semantic {
             Stmt::Assign(stmt) => self.analyze_assign(stmt)?,
             Stmt::IfStmt(stmt) => self.analyze_if_stmt(stmt, fd_type)?,
             Stmt::Return(expr) => {
-                let scope = self.get_scope_data(expr)?;
+                let scope = self.analyze_expr(expr)?;
                 if fd_type != scope.data_type {
                     return Err(format!(
                         "incompatible function return type and return stmt expr type: '{:?}' != '{:?}'",
@@ -100,8 +100,8 @@ impl Semantic {
     }
 
     fn analyze_assign(&mut self, stmt: &mut AssignStmt) -> Result<(), String> {
-        let target_scope = self.get_scope_data(&mut stmt.target)?;
-        let value_scope = self.get_scope_data(&mut stmt.value)?;
+        let target_scope = self.analyze_expr(&mut stmt.target)?;
+        let value_scope = self.analyze_expr(&mut stmt.value)?;
         if target_scope.data_type != value_scope.data_type {
             return Err(format!(
                 "incompatible asssign (value) data type with the target data type: '{:?}' != '{:?}'",
@@ -224,38 +224,6 @@ impl Semantic {
                         op, lhs, rhs
                     ))
                 }
-            }
-        }
-    }
-
-    fn get_scope_data(&mut self, expr: &mut Expr) -> Result<ExprData, String> {
-        match expr {
-            Expr::Int32(_) => Ok(ExprData::new(None, DataType::Int32)),
-            Expr::String(_) => Ok(ExprData::new(None, DataType::String)),
-            Expr::Bool(_) => Ok(ExprData::new(None, DataType::Bool)),
-            Expr::Ident(expr) => {
-                let scope = self
-                    .lookup(&expr.name)
-                    .ok_or_else(|| format!("use of undeclared identifier: '{}'", expr.name))?;
-                expr.id = scope.id;
-                expr.data_type = Some(scope.data_type);
-                return Ok(scope);
-            }
-            Expr::BinaryExpr(expr) => {
-                let left_scope = self.get_scope_data(&mut expr.left)?;
-                let right_scope = self.get_scope_data(&mut expr.right)?;
-
-                if left_scope.data_type != right_scope.data_type {
-                    return Err(format!(
-                        "operation of different expression data type not allowed: '{:?}' != '{:?}",
-                        left_scope.data_type, right_scope.data_type,
-                    ));
-                }
-
-                Ok(left_scope)
-            }
-            Expr::Empty => {
-                return Ok(ExprData::new(None, DataType::Void));
             }
         }
     }
