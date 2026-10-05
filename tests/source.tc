@@ -1,5 +1,7 @@
 int main() {
-	bool x = true;
-	x = false;
-	return 1;
+	int x = 20;
+	if x % 2 > 1 {
+		return x;
+	}
+	return 69;
 }

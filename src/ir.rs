@@ -57,22 +57,26 @@ impl<'i> IrGen<'i> {
         self.push("entry:");
 
         for stmt in fd.body.stmts.iter() {
-            match stmt {
-                Stmt::Return(expr) => {
-                    let (dt, value) = self.process_expr("", expr, 0);
-                    if dt.is_empty() && value.is_empty() {
-                        self.push("    ret void");
-                    } else {
-                        self.push(format!("    ret {} {}", dt, value).as_str());
-                    }
-                }
-                Stmt::Var(vs) => self.process_vs(vs),
-                Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
-                Stmt::IfStmt(stmt) => self.process_if_stmt(stmt),
-            }
+            self.process_stmt(stmt);
         }
 
         self.push("}");
+    }
+
+    fn process_stmt(&mut self, stmt: &Stmt) {
+        match stmt {
+            Stmt::Return(expr) => {
+                let (dt, value) = self.process_expr("", expr, 0);
+                if dt.is_empty() && value.is_empty() {
+                    self.push("    ret void");
+                } else {
+                    self.push(format!("    ret {} {}", dt, value).as_str());
+                }
+            }
+            Stmt::Var(vs) => self.process_vs(vs),
+            Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
+            Stmt::IfStmt(stmt) => self.process_if_stmt(stmt),
+        }
     }
 
     fn process_vs(&mut self, stmt: &VarStmt) {
@@ -99,7 +103,17 @@ impl<'i> IrGen<'i> {
     }
 
     fn process_if_stmt(&mut self, stmt: &IfStmt) {
-        todo!()
+        // TODO: implement block for each stmt
+        for (count, branch) in stmt.branches.iter().enumerate() {
+            let (dt, value) = self.process_expr("comp", &branch.cond_expr, 0);
+            self.push(
+                format!(
+                    "    br {} %{}, label %then_{}, label %else",
+                    dt, value, count
+                )
+                .as_str(),
+            );
+        }
     }
 
     /// param (lhs alloca var name, rhs expr, counter for binary expr)
@@ -132,14 +146,29 @@ impl<'i> IrGen<'i> {
         expr: &Box<BinaryExpr>,
         counter: usize,
     ) -> (String, String) {
-        let op = self.get_op_type(expr.op);
+        // kinda dumb way but it helps avoiding reallocation
+        let mut op = String::with_capacity(12);
+        op.push_str(self.get_op_type(expr.op));
         let lhs = self.process_expr(name, &expr.left, counter + 1);
         let rhs = self.process_expr(name, &expr.right, counter + 1);
+        let mut is_bool = false;
 
-        let temp = self.temp_name(name, op);
+        let temp = self.temp_name(name, op.as_str());
+
+        match expr.op {
+            BinaryOp::Less | BinaryOp::Greater => {
+                op.insert_str(0, "icmp ");
+                is_bool = true;
+            }
+            _ => {}
+        }
+
         self.push(format!("    {} = {} {} {}, {}", temp, op, lhs.0, lhs.1, rhs.1).as_str());
 
-        return (lhs.0, temp);
+        match is_bool {
+            true => return (String::from("i1"), temp),
+            false => return (lhs.0, temp),
+        }
     }
 
     fn process_assign_stmt(&mut self, stmt: &AssignStmt) {
@@ -196,17 +225,17 @@ impl<'i> IrGen<'i> {
             BinaryOp::Modulo => "srem",
             BinaryOp::Less => "slt",
             BinaryOp::Greater => "sgt",
-            BinaryOp::And => todo!(),
-            BinaryOp::Or => todo!(),
             BinaryOp::LessEqual => todo!(),
             BinaryOp::NotEqual => todo!(),
             BinaryOp::GreaterEqual => todo!(),
+            BinaryOp::EqualEqual => todo!(),
+            BinaryOp::And => todo!(),
+            BinaryOp::Or => todo!(),
             BinaryOp::BitOr => todo!(),
             BinaryOp::BitAnd => todo!(),
             BinaryOp::BitXor => todo!(),
             BinaryOp::BitLS => todo!(),
             BinaryOp::BitRS => todo!(),
-            BinaryOp::EqualEqual => todo!(),
         }
     }
 
