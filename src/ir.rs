@@ -2,7 +2,7 @@ use std::collections::{HashMap, hash_map::Entry};
 
 use crate::{
     ast::{
-        AssignStmt, Ast, BinaryExpr, BinaryOp,
+        AssignStmt, Ast, BinaryExpr, BinaryOp, Block,
         Decl::{FuncDef, Var},
         Expr, FunctionDef, IfStmt, Stmt, VarStmt,
     },
@@ -36,8 +36,8 @@ impl<'i> IrGen<'i> {
         self.process_ast();
     }
 
-    pub fn get_ir(self) -> String {
-        return self.ir_source;
+    pub fn get_ir(&self) -> &str {
+        return self.ir_source.as_str();
     }
 
     fn process_ast(&mut self) {
@@ -93,27 +93,54 @@ impl<'i> IrGen<'i> {
             return;
         }
 
-        let load_name = self.get_load_name(&stmt.name, stmt.id);
         self.push(&format!("    store {} {}, ptr {}", dt, value, alloca_name));
-        self.push(&format!(
-            "    {} = load {}, ptr {}",
-            load_name, dt, alloca_name
-        ));
         self.update_register(alloca_name.clone());
     }
 
     fn process_if_stmt(&mut self, stmt: &IfStmt) {
-        // TODO: implement block for each stmt
+        let mut has_else = false;
+        if stmt.else_stmt.is_some() {
+            has_else = true;
+        }
+
+        let mut next_branch = "after";
         for (count, branch) in stmt.branches.iter().enumerate() {
-            let (dt, value) = self.process_expr("comp", &branch.cond_expr, 0);
+            if count == stmt.branches.len() - 1 {
+                match has_else {
+                    true => next_branch = "else",
+                    false => {}
+                }
+            }
+
+            let (dt, value) = self.process_expr("%comp", &branch.cond_expr, 0);
+            let then_branch = format!("then_{}", count);
+            let else_branch = format!("{}_{}", next_branch, count);
+
             self.push(
                 format!(
-                    "    br {} %{}, label %then_{}, label %else",
-                    dt, value, count
+                    "    br {} {}, label %{}, label %{}",
+                    dt, value, then_branch, else_branch
                 )
                 .as_str(),
             );
+
+            self.process_if_branch(&then_branch, &branch.body, &else_branch);
         }
+
+        // match has_else {
+        //     true => {}
+        //     false => {}
+        // }
+    }
+
+    fn process_if_branch(&mut self, branch: &str, branch_body: &Block, next_branch: &str) {
+        self.push(format!("{}:", branch).as_str());
+
+        for stmt in branch_body.stmts.iter() {
+            self.process_stmt(stmt);
+        }
+        self.push(format!("    br label %{}", next_branch).as_str());
+        self.push(format!("{}:", next_branch).as_str());
     }
 
     /// param (lhs alloca var name, rhs expr, counter for binary expr)
@@ -125,9 +152,13 @@ impl<'i> IrGen<'i> {
             Expr::String(_) => todo!(),
             Expr::Bool(value) => ("i1".to_string(), value.to_string()),
             Expr::Ident(expr) => {
-                let name = self.get_load_name(&expr.name, expr.id);
+                let alloca_name = self.get_alloca_name(&expr.name, expr.id);
+                let load_name = self.get_load_name(&expr.name, expr.id);
+                let dt =
+                    self.get_ir_type(expr.data_type.expect("failed to get ident expr data type"));
+                self.push(format!("    {} = load {}, ptr {}", load_name, dt, alloca_name).as_str());
                 let dt = self.get_ir_type(expr.data_type.unwrap());
-                return (dt.to_string(), name);
+                return (dt.to_string(), load_name);
             }
             Expr::BinaryExpr(expr) => {
                 let result = self.process_binary_expr(name, expr, counter);
@@ -178,10 +209,10 @@ impl<'i> IrGen<'i> {
             // FIX: try to fix this damn clone thing
             let (dt, value) = self.process_expr(&alloca_name, &stmt.value, 0);
             self.update_register(alloca_name.clone());
-            let load_name = self.get_load_name(&expr.name, expr.id);
+            // let load_name = self.get_load_name(&expr.name, expr.id);
 
             self.push(format!("    store {} {}, ptr {}", dt, value, alloca_name).as_str());
-            self.push(format!("    {} = load {}, ptr {}", load_name, dt, alloca_name).as_str());
+            // self.push(format!("    {} = load {}, ptr {}", load_name, dt, alloca_name).as_str());
         }
     }
 

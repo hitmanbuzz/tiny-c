@@ -1,7 +1,7 @@
 int main() {
-	int x = 20;
-	if x % 2 > 1 {
-		return x;
+	int x = 30;
+	if x > 5 {
+		x = 69;
 	}
-	return 69;
+	return x;
 }
