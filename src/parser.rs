@@ -1,9 +1,15 @@
 use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
-    ast::{AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, Stmt, VarStmt},
-    token::{Token, TokenData},
-    types::{DataType, IdentType, Keyword, get_ident_type},
+    ast::{
+        AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, IfBranch, IfStmt,
+        Stmt, VarStmt,
+    },
+    token::{
+        Token::{self},
+        TokenData,
+    },
+    types::{DataType, Keyword},
 };
 
 pub struct Parser {
@@ -54,25 +60,22 @@ impl Parser {
             }
         };
 
-        let ident_type = self.get_ident(&ident).ok_or_else(|| ParseError {
+        let keyword = self.get_keyword(ident.as_str()).ok_or_else(|| ParseError {
+            msg: format!("expected keyword but found: `{}`", ident),
+            line: curr.line,
+            pos: curr.pos,
+        })?;
+
+        let data_type = keyword.get_data_type().ok_or_else(|| ParseError {
             msg: format!(
-                "conversion of `Identifier ({})` to its distinct type is not implemented",
-                ident,
+                "expected keyword data-type but found keyword: {:?}",
+                keyword
             ),
             line: curr.line,
             pos: curr.pos,
         })?;
 
-        match ident_type {
-            IdentType::DataType(data_type) => self.parse_node_type(data_type),
-            IdentType::Keyword(keyword) => {
-                return Err(ParseError {
-                    msg: format!("expected `DataType` but found: `Keyword ({:?})`", keyword),
-                    line: curr.line,
-                    pos: curr.pos,
-                });
-            }
-        }
+        return self.parse_node_type(data_type);
     }
 
     fn parse_node_type(&mut self, data_type: DataType) -> Result<Decl, ParseError> {
@@ -207,26 +210,40 @@ impl Parser {
     fn parse_stmt(&mut self) -> Result<Stmt, ParseError> {
         let curr = self.next();
         let stmt = match curr.token {
-            Token::Identifier(str) => {
-                if let Some(ident_type) = self.get_ident(&str) {
-                    match ident_type {
-                        IdentType::DataType(data_type) => {
-                            let node = self.parse_node_type(data_type)?;
-                            match node {
-                                Decl::FuncDef(f) => Err(ParseError {
-                                    msg: format!("unexpected function within a function: {:?}", f),
-                                    line: curr.line,
-                                    pos: curr.pos,
-                                }),
-                                Decl::Var(v) => Ok(Stmt::Var(v)),
-                            }
+            Token::Identifier(ident) => {
+                let Some(keyword) = self.get_keyword(&ident) else {
+                    return self.parse_assign_stmt(&ident);
+                };
+
+                match keyword {
+                    Keyword::Int | Keyword::Bool | Keyword::String | Keyword::Void => {
+                        // this is guarantee to work (hehehe)
+                        let data_type = keyword.get_data_type().unwrap();
+                        match self.parse_node_type(data_type)? {
+                            Decl::FuncDef(fd) => Err(ParseError {
+                                msg: format!("unexpected function within a function: {:?}", fd),
+                                line: curr.line,
+                                pos: curr.pos,
+                            }),
+                            Decl::Var(stmt) => Ok(Stmt::Var(stmt)),
                         }
-                        IdentType::Keyword(keyword) => match keyword {
-                            Keyword::Return => self.parse_return_stmt(),
-                        },
                     }
-                } else {
-                    return self.parse_assign_stmt(&str);
+                    Keyword::Return => self.parse_return_stmt(),
+                    Keyword::If => self.parse_if_stmt(),
+                    Keyword::Else => {
+                        return Err(ParseError {
+                            msg: format!("unexpected else stmt declration before a if stmt"),
+                            line: curr.line,
+                            pos: curr.pos,
+                        });
+                    }
+                    k => {
+                        return Err(ParseError {
+                            msg: format!("invalid keyword found at parse_stmt: {:?}", k),
+                            line: curr.line,
+                            pos: curr.pos,
+                        });
+                    }
                 }
             }
             t => {
@@ -238,6 +255,98 @@ impl Parser {
             }
         };
         return stmt;
+    }
+
+    fn parse_if_stmt(&mut self) -> Result<Stmt, ParseError> {
+        let mut stmt = IfStmt {
+            branches: Vec::new(),
+            else_stmt: None,
+        };
+
+        stmt.branches.push(self.parse_if_stmt_branch()?);
+
+        loop {
+            if !self.is_keyword("else") {
+                break;
+            }
+
+            self.next();
+
+            if self.is_keyword("if") {
+                self.next();
+                stmt.branches.push(self.parse_if_stmt_branch()?);
+            } else {
+                stmt.else_stmt = Some(self.parse_else_stmt()?);
+                break;
+            }
+        }
+
+        return Ok(Stmt::IfStmt(stmt));
+    }
+
+    fn parse_else_stmt(&mut self) -> Result<Block, ParseError> {
+        let mut curr = self.next();
+        if curr.token != Token::LeftCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `LeftCurlyBr` after else keyword but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        let body = self.parse_block()?;
+
+        curr = self.next();
+        if curr.token != Token::RightCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `RightCurlyBr` after the end of else body block but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        return Ok(Block { stmts: body.stmts });
+    }
+
+    fn parse_if_stmt_branch(&mut self) -> Result<IfBranch, ParseError> {
+        let expr = self.parse_expr(0.0)?;
+
+        let mut curr = self.next();
+        if curr.token != Token::LeftCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `LeftCurlyBr` before the start of if_stmt block but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        let body = self.parse_block()?;
+
+        curr = self.next();
+        if curr.token != Token::RightCurlyBr {
+            return Err(ParseError {
+                msg: format!(
+                    "expected `RightCurlyBr` at the end of if_stmt block but found: {:?}",
+                    curr.token
+                ),
+                line: curr.line,
+                pos: curr.pos,
+            });
+        }
+
+        return Ok(IfBranch {
+            cond_expr: expr,
+            body,
+        });
     }
 
     fn parse_assign_stmt(&mut self, target: &str) -> Result<Stmt, ParseError> {
@@ -297,18 +406,18 @@ impl Parser {
     }
 
     fn parse_expr(&mut self, min_bp: f32) -> Result<Expr, ParseError> {
-        if self.peek().token == Token::SemiColon {
-            return Ok(Expr::Empty);
-        }
-
         let curr = self.next();
         let mut lhs = match curr.token {
             Token::String(str) => Expr::String(str),
-            Token::Identifier(str) => Expr::Ident(IdentExpr {
-                name: str,
-                id: None,
-                data_type: None,
-            }),
+            Token::Identifier(str) => match str.as_str() {
+                "true" => Expr::Bool(true),
+                "false" => Expr::Bool(false),
+                _ => Expr::Ident(IdentExpr {
+                    name: str,
+                    id: None,
+                    data_type: None,
+                }),
+            },
             Token::Number(str) => {
                 let num = str.parse::<i32>().map_err(|_| ParseError {
                     msg: format!("failed to parse `{}` to i32", str),
@@ -344,8 +453,25 @@ impl Parser {
         loop {
             match self.peek().token {
                 // FIX: EOF should not break always (it can return error)
-                Token::SemiColon | Token::RightParen | Token::Eof => break,
-                Token::Plus | Token::Minus | Token::Star | Token::ForwardSlash | Token::Modulo => {
+                Token::SemiColon | Token::RightParen | Token::LeftCurlyBr | Token::Eof => break,
+                Token::Plus
+                | Token::Minus
+                | Token::Star
+                | Token::ForwardSlash
+                | Token::Modulo
+                | Token::And
+                | Token::Or
+                | Token::Less
+                | Token::Greater
+                | Token::LessEqual
+                | Token::GreaterEqual
+                | Token::EqualEqual
+                | Token::NotEqual
+                | Token::BitAnd
+                | Token::BitOr
+                | Token::BitXor
+                | Token::BitLS
+                | Token::BitRS => {
                     let (lbp, rbp, op) = self.peek().token.bin_op().ok_or_else(|| ParseError {
                         msg: format!("expected `Operator` but found: {:?}", self.peek().token),
                         line: self.peek().line,
@@ -385,8 +511,24 @@ impl Parser {
         return self.tokens.peek().unwrap_or(&TokenData::default()).clone();
     }
 
-    fn get_ident(&self, ident: &str) -> Option<IdentType> {
-        get_ident_type(ident)
+    fn is_keyword(&mut self, keyword: &str) -> bool {
+        matches!(self.peek().token, Token::Identifier(name) if name == keyword)
+    }
+
+    /// get keyword type from ident string
+    fn get_keyword(&self, ident: &str) -> Option<Keyword> {
+        match ident {
+            "int" => Some(Keyword::Int),
+            "void" => Some(Keyword::Void),
+            "string" => Some(Keyword::String),
+            "bool" => Some(Keyword::Bool),
+            "return" => Some(Keyword::Return),
+            "if" => Some(Keyword::If),
+            "else" => Some(Keyword::Else),
+            "true" => Some(Keyword::True),
+            "false" => Some(Keyword::False),
+            _ => None,
+        }
     }
 }
 
@@ -444,7 +586,7 @@ mod tests {
                 body: Block {
                     stmts: vec![Stmt::Return(Expr::Int32(69))],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 
@@ -505,7 +647,7 @@ mod tests {
                 body: Block {
                     stmts: vec![
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: String::from("a"),
                             value: Expr::Int32(67),
                             id: None,
@@ -514,7 +656,7 @@ mod tests {
                         Stmt::Return(Expr::Int32(69)),
                     ],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 
@@ -581,7 +723,7 @@ mod tests {
                 body: Block {
                     stmts: vec![
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: String::from("x"),
                             value: Expr::Int32(69),
                             id: None,
@@ -602,7 +744,7 @@ mod tests {
                         })),
                     ],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 
@@ -679,7 +821,7 @@ mod tests {
                 body: Block {
                     stmts: vec![
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: "a".to_string(),
 
                             // 1 * (2 + 3)
@@ -696,7 +838,7 @@ mod tests {
                             is_global: false,
                         }),
                         Stmt::Var(VarStmt {
-                            data_type: DataType::Int,
+                            data_type: DataType::Int32,
                             name: "b".to_string(),
                             value: Expr::BinaryExpr(Box::new(BinaryExpr {
                                 left: Expr::BinaryExpr(Box::new(BinaryExpr {
@@ -728,7 +870,7 @@ mod tests {
                         }),
                     ],
                 },
-                return_type: DataType::Int,
+                return_type: DataType::Int32,
             })],
         };
 

@@ -2,9 +2,9 @@ use std::collections::{HashMap, hash_map::Entry};
 
 use crate::{
     ast::{
-        AssignStmt, Ast, BinaryExpr, BinaryOp,
+        AssignStmt, Ast, BinaryExpr, BinaryOp, Block,
         Decl::{FuncDef, Var},
-        Expr, FunctionDef, Stmt, VarStmt,
+        Expr, FunctionDef, IfStmt, Stmt, VarStmt,
     },
     types::DataType,
 };
@@ -36,8 +36,8 @@ impl<'i> IrGen<'i> {
         self.process_ast();
     }
 
-    pub fn get_ir(self) -> String {
-        return self.ir_source;
+    pub fn get_ir(&self) -> &str {
+        return self.ir_source.as_str();
     }
 
     fn process_ast(&mut self) {
@@ -57,44 +57,90 @@ impl<'i> IrGen<'i> {
         self.push("entry:");
 
         for stmt in fd.body.stmts.iter() {
-            match stmt {
-                Stmt::Return(expr) => {
-                    let (dt, value) = self.process_expr("", expr, 0);
-                    if dt.is_empty() && value.is_empty() {
-                        self.push("    ret void");
-                    } else {
-                        self.push(format!("    ret {} {}", dt, value).as_str());
-                    }
-                }
-                Stmt::Var(vs) => self.process_vs(vs),
-                Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
-            }
+            self.process_stmt(stmt);
         }
 
         self.push("}");
     }
 
-    fn process_vs(&mut self, vs: &VarStmt) {
-        let alloca_dt = self.get_ir_type(vs.data_type);
-        let alloca_name = self.get_alloca_name(&vs.name, vs.id);
+    fn process_stmt(&mut self, stmt: &Stmt) {
+        match stmt {
+            Stmt::Return(expr) => {
+                let (dt, value) = self.process_expr("", expr, 0);
+                if dt.is_empty() && value.is_empty() {
+                    self.push("    ret void");
+                } else {
+                    self.push(format!("    ret {} {}", dt, value).as_str());
+                }
+            }
+            Stmt::Var(vs) => self.process_vs(vs),
+            Stmt::Assign(stmt) => self.process_assign_stmt(stmt),
+            Stmt::IfStmt(stmt) => self.process_if_stmt(stmt),
+        }
+    }
+
+    fn process_vs(&mut self, stmt: &VarStmt) {
+        let alloca_dt = self.get_ir_type(stmt.data_type);
+        let alloca_name = self.get_alloca_name(&stmt.name, stmt.id);
 
         // CLONE: try to fix this damn clone thing
         self.update_register(alloca_name.clone());
 
         self.push(&format!("    {} = alloca {}", alloca_name, alloca_dt));
 
-        let (dt, value) = self.process_expr(&alloca_name, &vs.value, 0);
+        let (dt, value) = self.process_expr(&alloca_name, &stmt.value, 0);
         if dt.is_empty() && value.is_empty() {
             return;
         }
 
-        let load_name = self.get_load_name(&vs.name, vs.id);
         self.push(&format!("    store {} {}, ptr {}", dt, value, alloca_name));
-        self.push(&format!(
-            "    {} = load {}, ptr {}",
-            load_name, dt, alloca_name
-        ));
         self.update_register(alloca_name.clone());
+    }
+
+    fn process_if_stmt(&mut self, stmt: &IfStmt) {
+        let mut has_else = false;
+        if stmt.else_stmt.is_some() {
+            has_else = true;
+        }
+
+        let mut next_branch = "after";
+        for (count, branch) in stmt.branches.iter().enumerate() {
+            if count == stmt.branches.len() - 1 {
+                match has_else {
+                    true => next_branch = "else",
+                    false => {}
+                }
+            }
+
+            let (dt, value) = self.process_expr("%comp", &branch.cond_expr, 0);
+            let then_branch = format!("then_{}", count);
+            let else_branch = format!("{}_{}", next_branch, count);
+
+            self.push(
+                format!(
+                    "    br {} {}, label %{}, label %{}",
+                    dt, value, then_branch, else_branch
+                )
+                .as_str(),
+            );
+
+            self.process_if_branch(&then_branch, &branch.body, &else_branch);
+        }
+
+        // match has_else {
+        //     true => {}
+        //     false => {}
+        // }
+    }
+
+    fn process_if_branch(&mut self, branch: &str, branch_body: &Block, next_branch: &str) {
+        self.push(format!("{}:", branch).as_str());
+
+        for stmt in branch_body.stmts.iter() {
+            self.process_stmt(stmt);
+        }
+        self.push(format!("    br label %{}", next_branch).as_str());
+        self.push(format!("{}:", next_branch).as_str());
     }
 
     /// param (lhs alloca var name, rhs expr, counter for binary expr)
@@ -102,12 +148,17 @@ impl<'i> IrGen<'i> {
     /// return (DataType, Value/Register)
     fn process_expr(&mut self, name: &str, expr: &Expr, counter: usize) -> (String, String) {
         match expr {
-            Expr::Int32(value) => return ("i32".to_string(), value.to_string()),
+            Expr::Int32(value) => ("i32".to_string(), value.to_string()),
             Expr::String(_) => todo!(),
+            Expr::Bool(value) => ("i1".to_string(), value.to_string()),
             Expr::Ident(expr) => {
-                let name = self.get_load_name(&expr.name, expr.id);
+                let alloca_name = self.get_alloca_name(&expr.name, expr.id);
+                let load_name = self.get_load_name(&expr.name, expr.id);
+                let dt =
+                    self.get_ir_type(expr.data_type.expect("failed to get ident expr data type"));
+                self.push(format!("    {} = load {}, ptr {}", load_name, dt, alloca_name).as_str());
                 let dt = self.get_ir_type(expr.data_type.unwrap());
-                return (dt.to_string(), name);
+                return (dt.to_string(), load_name);
             }
             Expr::BinaryExpr(expr) => {
                 let result = self.process_binary_expr(name, expr, counter);
@@ -126,14 +177,29 @@ impl<'i> IrGen<'i> {
         expr: &Box<BinaryExpr>,
         counter: usize,
     ) -> (String, String) {
-        let op = self.get_op_type(expr.op);
+        // kinda dumb way but it helps avoiding reallocation
+        let mut op = String::with_capacity(12);
+        op.push_str(self.get_op_type(expr.op));
         let lhs = self.process_expr(name, &expr.left, counter + 1);
         let rhs = self.process_expr(name, &expr.right, counter + 1);
+        let mut is_bool = false;
 
-        let temp = self.temp_name(name, op);
+        let temp = self.temp_name(name, op.as_str());
+
+        match expr.op {
+            BinaryOp::Less | BinaryOp::Greater => {
+                op.insert_str(0, "icmp ");
+                is_bool = true;
+            }
+            _ => {}
+        }
+
         self.push(format!("    {} = {} {} {}, {}", temp, op, lhs.0, lhs.1, rhs.1).as_str());
 
-        return (lhs.0, temp);
+        match is_bool {
+            true => return (String::from("i1"), temp),
+            false => return (lhs.0, temp),
+        }
     }
 
     fn process_assign_stmt(&mut self, stmt: &AssignStmt) {
@@ -143,10 +209,10 @@ impl<'i> IrGen<'i> {
             // FIX: try to fix this damn clone thing
             let (dt, value) = self.process_expr(&alloca_name, &stmt.value, 0);
             self.update_register(alloca_name.clone());
-            let load_name = self.get_load_name(&expr.name, expr.id);
+            // let load_name = self.get_load_name(&expr.name, expr.id);
 
             self.push(format!("    store {} {}, ptr {}", dt, value, alloca_name).as_str());
-            self.push(format!("    {} = load {}, ptr {}", load_name, dt, alloca_name).as_str());
+            // self.push(format!("    {} = load {}, ptr {}", load_name, dt, alloca_name).as_str());
         }
     }
 
@@ -171,11 +237,13 @@ impl<'i> IrGen<'i> {
         return format!("{}_value_{}", alloca_name, r.curr_c);
     }
 
+    // convert to LLVM IR data type
     fn get_ir_type(&self, dt: DataType) -> &'i str {
         match dt {
-            DataType::Int => "i32",
-            DataType::CharPtr => "char*",
+            DataType::Int32 => "i32",
+            DataType::String => "string",
             DataType::Void => "void",
+            DataType::Bool => "i1",
         }
     }
 
@@ -186,6 +254,19 @@ impl<'i> IrGen<'i> {
             BinaryOp::Mul => "mul",
             BinaryOp::Div => "sdiv",
             BinaryOp::Modulo => "srem",
+            BinaryOp::Less => "slt",
+            BinaryOp::Greater => "sgt",
+            BinaryOp::LessEqual => todo!(),
+            BinaryOp::NotEqual => todo!(),
+            BinaryOp::GreaterEqual => todo!(),
+            BinaryOp::EqualEqual => todo!(),
+            BinaryOp::And => todo!(),
+            BinaryOp::Or => todo!(),
+            BinaryOp::BitOr => todo!(),
+            BinaryOp::BitAnd => todo!(),
+            BinaryOp::BitXor => todo!(),
+            BinaryOp::BitLS => todo!(),
+            BinaryOp::BitRS => todo!(),
         }
     }
 
