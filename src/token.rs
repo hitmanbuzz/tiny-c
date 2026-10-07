@@ -20,11 +20,10 @@ pub enum Token {
 
     Not, // !
 
-    Question,           // ?
-    Colon,              // :
-    SemiColon,          // ;
-    StarStar,           // **
-    DoubleForwardSlash, // //
+    Question,  // ?
+    Colon,     // :
+    SemiColon, // ;
+    StarStar,  // **
 
     Less,         // <
     Greater,      // >

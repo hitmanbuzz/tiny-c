@@ -134,7 +134,7 @@ impl<'l> Lexer<'l> {
                     if let Some(&next) = self.source.peek() {
                         if next.1 == '/' {
                             self.source.next();
-                            self.add_token(Token::DoubleForwardSlash, next.0);
+                            self.lex_comment();
                         } else {
                             self.add_token(Token::ForwardSlash, c.0);
                         }
@@ -297,6 +297,18 @@ impl<'l> Lexer<'l> {
                     line: self.line,
                     pos: first_char.0,
                 });
+            }
+        }
+    }
+
+    fn lex_comment(&mut self) {
+        while let Some(token) = self.source.next() {
+            match token.1 {
+                '\n' => {
+                    self.line += 1;
+                    break;
+                }
+                _ => {}
             }
         }
     }
