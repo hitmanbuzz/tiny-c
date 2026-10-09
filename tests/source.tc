@@ -1,7 +1,4 @@
 int main() {
-	int x = 30;
-	if x > 5 {
-		x = 69; // jump to `after`
-	}
+	int x = 69;
 	return x;
 }

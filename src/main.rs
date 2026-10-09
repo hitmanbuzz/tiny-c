@@ -1,43 +1,48 @@
 mod ast;
+mod codegen;
 mod debug;
-mod ir;
 mod lexer;
 mod parser;
 mod semantic;
 mod token;
 mod types;
 
-use std::{env, fs};
+use clap::Parser;
+use inkwell::context::Context;
+use std::{fs, path::Path};
 
-use crate::{ir::IrGen, lexer::Lexer, parser::Parser, semantic::Semantic};
+use crate::{codegen::CodeGen, lexer::Lexer, semantic::Semantic};
+
+#[derive(clap::Parser)]
+#[command(version)]
+struct Cmd {
+    /// source code file path
+    #[arg(short, long, required = true)]
+    source: Option<String>,
+
+    /// final binary file path
+    #[arg(short, long)]
+    target: Option<String>,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let cmd = Cmd::parse();
+    let source = cmd.source.unwrap();
+    let source_path = Path::new(&source);
+    let source_code: String;
 
-    if args.len() != 2 {
-        eprintln!("bad args: <program> <file-path>");
-        return;
-    }
-
-    let file_path = &args[1];
-
-    // didn't know you don't need `mut`
-    // i guess it is not initialized and doesn't need mutate since there is no any data on it
-    let source: String;
-
-    if let Ok(content) = fs::read_to_string(file_path) {
-        source = content;
+    if let Ok(content) = fs::read_to_string(source_path) {
+        source_code = content;
     } else {
-        // fuck the error msg
-        eprintln!("failed to read file: {}", file_path);
+        eprintln!("failed to read file: {}", source_path.to_str().unwrap());
         return;
     }
 
-    let mut lexer = Lexer::new(&source);
+    let mut lexer = Lexer::new(&source_code);
     lexer.tokenize();
     // lexer.print();
 
-    let mut parser = Parser::new(lexer.tokens);
+    let mut parser = parser::Parser::new(lexer.tokens);
     parser.parse();
 
     let mut sym = Semantic::new();
@@ -48,10 +53,7 @@ fn main() {
 
     parser.print();
 
-    // it will generate LLVM IR code
-    let mut ir = IrGen::new(&parser.ast);
-    ir.gen_ir();
-    let ir_source = ir.get_ir();
-
-    fs::write("tests/output.ll", ir_source).unwrap();
+    let context = Context::create();
+    let cg = CodeGen::new(&parser.ast, &context, source_path);
+    cg.generate();
 }
