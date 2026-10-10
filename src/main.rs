@@ -13,7 +13,7 @@ use std::{fs, path::Path};
 
 use crate::{codegen::CodeGen, lexer::Lexer, semantic::Semantic};
 
-#[derive(clap::Parser)]
+#[derive(clap::Parser, Debug)]
 #[command(version)]
 struct Cmd {
     /// source code file path
@@ -51,9 +51,17 @@ fn main() {
         return;
     }
 
-    parser.print();
+    // parser.print();
 
     let context = Context::create();
-    let cg = CodeGen::new(&parser.ast, &context, source_path);
+    let mut cg = CodeGen::new(&parser.ast, &context, source_path);
     cg.generate();
+    let result = cg.get_ir_string();
+
+    if cmd.target.is_none() {
+        println!("Target path not provided so printing on stdout");
+        println!("\n{}", result);
+    } else {
+        fs::write(cmd.target.unwrap(), result).unwrap();
+    }
 }

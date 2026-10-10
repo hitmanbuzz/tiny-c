@@ -24,7 +24,7 @@ pub enum DataType {
 
 impl Keyword {
     /// keyword -> datatype
-    pub fn get_data_type(&self) -> Option<DataType> {
+    pub fn to_data_type(&self) -> Option<DataType> {
         match self {
             Keyword::Int => Some(DataType::Int32),
             Keyword::Bool => Some(DataType::Bool),

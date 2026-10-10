@@ -1,20 +1,47 @@
-use std::{path::Path, process::exit};
+use std::{collections::HashMap, path::Path, process::exit};
 
 use inkwell::{
+    IntPredicate,
     builder::Builder,
     context::Context,
     module::Module,
-    types::{BasicMetadataTypeEnum, FunctionType},
+    types::{BasicMetadataTypeEnum, BasicTypeEnum, FunctionType},
+    values::{BasicValueEnum, PointerValue},
 };
 
 use crate::{
     ast::{
-        Ast, Block,
+        Ast, BinaryExpr, BinaryOp, Block,
         Decl::{self, FuncDef, Var},
-        FunctionDef, Stmt, VarStmt,
+        Expr, FunctionDef, Stmt, VarStmt,
     },
     types::DataType,
 };
+
+struct AllocaInfo<'c> {
+    ptr: PointerValue<'c>,
+    ty: BasicTypeEnum<'c>,
+}
+
+struct Scope<'c> {
+    allocas: HashMap<String, AllocaInfo<'c>>,
+}
+
+impl<'c> Scope<'c> {
+    fn new() -> Self {
+        Self {
+            allocas: HashMap::new(),
+        }
+    }
+
+    fn declare(&mut self, name: String, ptr: PointerValue<'c>, ty: BasicTypeEnum<'c>) {
+        self.allocas.insert(name, AllocaInfo { ptr, ty });
+    }
+
+    fn lookup(&self, name: &str) -> Option<&AllocaInfo<'c>> {
+        self.allocas.get(name)
+    }
+}
 
 pub struct CodeGen<'c> {
     context: &'c Context,
@@ -22,6 +49,8 @@ pub struct CodeGen<'c> {
     builder: Builder<'c>,
 
     ast: &'c Ast,
+
+    symbols: Vec<Scope<'c>>,
 }
 
 impl<'c> CodeGen<'c> {
@@ -38,10 +67,11 @@ impl<'c> CodeGen<'c> {
             module: module,
             builder: context.create_builder(),
             ast,
+            symbols: Vec::new(),
         }
     }
 
-    pub fn generate(&self) {
+    pub fn generate(&mut self) {
         self.gen_program();
 
         if let Err(err) = self.module.verify() {
@@ -50,20 +80,24 @@ impl<'c> CodeGen<'c> {
         }
     }
 
-    fn gen_program(&self) {
+    pub fn get_ir_string(&self) -> String {
+        self.module.print_to_string().to_string()
+    }
+
+    fn gen_program(&mut self) {
         for decl in self.ast.decls.iter() {
             self.gen_decl(decl);
         }
     }
 
-    fn gen_decl(&self, decl: &Decl) {
+    fn gen_decl(&mut self, decl: &Decl) {
         match decl {
             FuncDef(fd) => self.gen_fn(fd),
             Var(vs) => self.gen_vs(vs),
         }
     }
 
-    fn gen_fn(&self, fd: &FunctionDef) {
+    fn gen_fn(&mut self, fd: &FunctionDef) {
         let fn_type = self.create_fn_type(fd.return_type, &[], false);
         let function = self.module.add_function(&fd.name, fn_type, None);
         let entry_block = self.context.append_basic_block(function, "entry");
@@ -71,23 +105,182 @@ impl<'c> CodeGen<'c> {
         self.gen_body(&fd.body);
     }
 
-    fn gen_body(&self, body: &Block) {
+    fn gen_body(&mut self, body: &Block) {
+        // FIX: function body should also be in the symbol table
+        self.push_scope();
+
         for stmt in body.stmts.iter() {
             self.gen_stmt(stmt);
         }
+
+        self.pop_scope();
     }
 
-    fn gen_stmt(&self, stmt: &Stmt) {
+    fn gen_stmt(&mut self, stmt: &Stmt) {
         // TODO: time to make another SymbolTable 😭
         match stmt {
-            Stmt::Return(expr) => todo!(),
-            Stmt::Var(stmt) => todo!(),
+            Stmt::Return(expr) => self.gen_return_stmt(expr),
+            Stmt::Var(stmt) => self.gen_vs(stmt),
             Stmt::Assign(stmt) => todo!(),
             Stmt::IfStmt(stmt) => todo!(),
         }
     }
 
-    fn gen_vs(&self, vs: &VarStmt) {}
+    fn gen_vs(&mut self, vs: &VarStmt) {
+        if let Some(ty) = self.create_llvm_type(vs.data_type) {
+            let ptr = self
+                .builder
+                .build_alloca(ty, &vs.name)
+                .expect(format!("failed to build alloca: {}", &vs.name).as_str());
+
+            let result = self.gen_expr(&vs.value);
+            self.builder
+                .build_store(ptr, result.0)
+                .expect(format!("failed to build store: {}", &vs.name).as_str());
+
+            let alloca_name = self.create_alloca_name(
+                &vs.name,
+                vs.id
+                    .expect(format!("failed to get symbol id: {}", &vs.name).as_str()),
+            );
+
+            self.delcare(alloca_name, ptr, ty);
+        } else {
+            eprintln!(
+                "invalid variable data type declaration: {:?}({})",
+                vs.data_type,
+                vs.name.as_str()
+            );
+            exit(-1);
+        }
+    }
+
+    fn gen_return_stmt(&self, expr: &Expr) {
+        let result = self.gen_expr(expr);
+        self.builder
+            .build_return(Some(&result.0))
+            .expect("failed to build return");
+    }
+
+    fn gen_expr(&self, expr: &Expr) -> (BasicValueEnum<'c>, DataType) {
+        match expr {
+            Expr::Int32(n) => {
+                let llvm_ty = self.context.i32_type();
+                return (llvm_ty.const_int(*n as u64, false).into(), DataType::Int32);
+            }
+            Expr::String(_) => todo!(),
+            Expr::Bool(b) => {
+                return (
+                    self.context.bool_type().const_int(*b as u64, false).into(),
+                    DataType::Bool,
+                );
+            }
+            Expr::Ident(ix) => {
+                let alloca_name = self.create_alloca_name(
+                    &ix.name,
+                    ix.id
+                        .expect(format!("failed to get symbol id: {}", ix.name.as_str()).as_str()),
+                );
+
+                let info = self
+                    .lookup(&alloca_name)
+                    .expect(format!("failed to lookup ident: {}", ix.name.as_str()).as_str());
+                return (
+                    self.builder
+                        .build_load(info.ty, info.ptr, &ix.name)
+                        .expect("failed to create build load"),
+                    ix.data_type.expect(
+                        format!("failed to get identifer data type: {}", ix.name.as_str()).as_str(),
+                    ),
+                );
+            }
+            Expr::BinaryExpr(expr) => self.gen_binary_expr(expr),
+            Expr::Empty => todo!(),
+        }
+    }
+
+    fn gen_binary_expr(&self, expr: &Box<BinaryExpr>) -> (BasicValueEnum<'c>, DataType) {
+        let lhs = self.gen_expr(&expr.left);
+        let rhs = self.gen_expr(&expr.right);
+        self.create_binary_build(expr.op, lhs.0, rhs.0)
+    }
+
+    fn create_binary_build(
+        &self,
+        op: BinaryOp,
+        lhs: BasicValueEnum<'c>,
+        rhs: BasicValueEnum<'c>,
+    ) -> (BasicValueEnum<'c>, DataType) {
+        match (lhs, rhs) {
+            (BasicValueEnum::IntValue(l), BasicValueEnum::IntValue(r)) => {
+                let result = match op {
+                    BinaryOp::Add => self.builder.build_int_add(l, r, "addtmp").unwrap(),
+                    BinaryOp::Sub => self.builder.build_int_sub(l, r, "subtmp").unwrap(),
+                    BinaryOp::Mul => self.builder.build_int_mul(l, r, "multmp").unwrap(),
+                    BinaryOp::Div => self.builder.build_int_signed_div(l, r, "divtmp").unwrap(),
+                    BinaryOp::Modulo => self.builder.build_int_signed_rem(l, r, "remtemp").unwrap(),
+                    BinaryOp::Less => self
+                        .builder
+                        .build_int_compare(IntPredicate::SLT, l, r, "cmptmp")
+                        .unwrap(),
+                    BinaryOp::Greater => self
+                        .builder
+                        .build_int_compare(IntPredicate::SGT, l, r, "cmptmp")
+                        .unwrap(),
+                    BinaryOp::LessEqual => self
+                        .builder
+                        .build_int_compare(IntPredicate::SLE, l, r, "cmptmp")
+                        .unwrap(),
+                    BinaryOp::GreaterEqual => self
+                        .builder
+                        .build_int_compare(IntPredicate::SGE, l, r, "cmptmp")
+                        .unwrap(),
+                    BinaryOp::EqualEqual => self
+                        .builder
+                        .build_int_compare(IntPredicate::EQ, l, r, "cmptmp")
+                        .unwrap(),
+                    BinaryOp::NotEqual => self
+                        .builder
+                        .build_int_compare(IntPredicate::NE, l, r, "cmptmp")
+                        .unwrap(),
+                    _ => todo!(),
+                };
+
+                return (result.into(), DataType::Int32);
+            }
+            _ => todo!(),
+        }
+    }
+
+    fn push_scope(&mut self) {
+        self.symbols.push(Scope::new());
+    }
+
+    fn pop_scope(&mut self) {
+        self.symbols.pop();
+    }
+
+    fn delcare(&mut self, name: String, ptr: PointerValue<'c>, ty: BasicTypeEnum<'c>) {
+        self.symbols
+            .last_mut()
+            .expect("forgot to create/push scope")
+            .declare(name, ptr, ty);
+    }
+
+    fn lookup(&self, name: &str) -> Option<&AllocaInfo<'c>> {
+        for scope in self.symbols.iter().rev() {
+            return scope.lookup(name);
+        }
+        None
+    }
+
+    fn create_llvm_type(&self, dt: DataType) -> Option<BasicTypeEnum<'c>> {
+        match dt {
+            DataType::Int32 => Some(self.context.i32_type().into()),
+            DataType::Bool => Some(self.context.bool_type().into()),
+            _ => None,
+        }
+    }
 
     fn create_fn_type(
         &self,
@@ -101,5 +294,9 @@ impl<'c> CodeGen<'c> {
             DataType::String => todo!(),
             DataType::Void => self.context.void_type().fn_type(param_types, is_var_args),
         }
+    }
+
+    fn create_alloca_name(&self, name: &str, symbol_id: usize) -> String {
+        format!("{}_{}", name, symbol_id)
     }
 }

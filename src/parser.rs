@@ -66,7 +66,7 @@ impl Parser {
             pos: curr.pos,
         })?;
 
-        let data_type = keyword.get_data_type().ok_or_else(|| ParseError {
+        let data_type = keyword.to_data_type().ok_or_else(|| ParseError {
             msg: format!(
                 "expected keyword data-type but found keyword: {:?}",
                 keyword
@@ -218,7 +218,7 @@ impl Parser {
                 match keyword {
                     Keyword::Int | Keyword::Bool | Keyword::String | Keyword::Void => {
                         // this is guarantee to work (hehehe)
-                        let data_type = keyword.get_data_type().unwrap();
+                        let data_type = keyword.to_data_type().unwrap();
                         match self.parse_node_type(data_type)? {
                             Decl::FuncDef(fd) => Err(ParseError {
                                 msg: format!("unexpected function within a function: {:?}", fd),
