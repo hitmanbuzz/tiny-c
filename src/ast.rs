@@ -2,18 +2,18 @@ use std::fmt::{self, Display, Formatter};
 
 use crate::types::DataType;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Ast {
     pub decls: Vec<Decl>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Decl {
     FuncDef(FunctionDef),
     Var(VarStmt),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Return(Expr),
     Var(VarStmt),
@@ -21,16 +21,17 @@ pub enum Stmt {
     IfStmt(IfStmt),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct IdentExpr {
     pub name: String,
     pub id: Option<usize>,
     pub data_type: Option<DataType>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Int32(i32),
+    Float32(f32),
     String(String),
     Bool(bool),
     Ident(IdentExpr),
@@ -38,7 +39,7 @@ pub enum Expr {
     Empty,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct FunctionDef {
     pub return_type: DataType,
     pub name: String,
@@ -52,12 +53,12 @@ pub struct Param {
     pub p_type: DataType,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct VarStmt {
     pub data_type: DataType,
     pub name: String,
@@ -66,7 +67,7 @@ pub struct VarStmt {
     pub is_global: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct AssignStmt {
     pub target: Expr,
     pub value: Expr,
@@ -97,19 +98,19 @@ pub enum BinaryOp {
     BitRS,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct IfStmt {
     pub branches: Vec<IfBranch>,
     pub else_stmt: Option<Block>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct IfBranch {
     pub cond_expr: Expr,
     pub body: Block,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
     pub left: Expr,
     pub op: BinaryOp,
@@ -319,6 +320,10 @@ fn fmt_expr(f: &mut Formatter<'_>, expr: &Expr, prefix: &str, last: bool) -> fmt
     match expr {
         Expr::Int32(value) => {
             writeln!(f, "{prefix}{branch}Int32: {value}")?;
+        }
+
+        Expr::Float32(value) => {
+            writeln!(f, "{prefix}{branch}Float32: {value}")?;
         }
 
         Expr::String(value) => {

@@ -62,6 +62,6 @@ fn main() {
         println!("Target path not provided so printing on stdout");
         println!("\n{}", result);
     } else {
-        fs::write(cmd.target.unwrap(), result).unwrap();
+        cg.save(cmd.target.unwrap().as_str());
     }
 }

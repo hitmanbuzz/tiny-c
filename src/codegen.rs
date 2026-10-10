@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::Path, process::exit};
 
 use inkwell::{
-    IntPredicate,
+    FloatPredicate, IntPredicate,
     builder::Builder,
     context::Context,
     module::Module,
@@ -11,7 +11,7 @@ use inkwell::{
 
 use crate::{
     ast::{
-        Ast, BinaryExpr, BinaryOp, Block,
+        AssignStmt, Ast, BinaryExpr, BinaryOp, Block,
         Decl::{self, FuncDef, Var},
         Expr, FunctionDef, Stmt, VarStmt,
     },
@@ -80,6 +80,10 @@ impl<'c> CodeGen<'c> {
         }
     }
 
+    pub fn save(&self, target_path: &str) {
+        self.module.print_to_file(target_path).unwrap();
+    }
+
     pub fn get_ir_string(&self) -> String {
         self.module.print_to_string().to_string()
     }
@@ -93,7 +97,7 @@ impl<'c> CodeGen<'c> {
     fn gen_decl(&mut self, decl: &Decl) {
         match decl {
             FuncDef(fd) => self.gen_fn(fd),
-            Var(vs) => self.gen_vs(vs),
+            Var(stmt) => self.gen_var_stmt(stmt),
         }
     }
 
@@ -120,13 +124,13 @@ impl<'c> CodeGen<'c> {
         // TODO: time to make another SymbolTable 😭
         match stmt {
             Stmt::Return(expr) => self.gen_return_stmt(expr),
-            Stmt::Var(stmt) => self.gen_vs(stmt),
-            Stmt::Assign(stmt) => todo!(),
+            Stmt::Var(stmt) => self.gen_var_stmt(stmt),
+            Stmt::Assign(stmt) => self.gen_assign_stmt(stmt),
             Stmt::IfStmt(stmt) => todo!(),
         }
     }
 
-    fn gen_vs(&mut self, vs: &VarStmt) {
+    fn gen_var_stmt(&mut self, vs: &VarStmt) {
         if let Some(ty) = self.create_llvm_type(vs.data_type) {
             let ptr = self
                 .builder
@@ -155,6 +159,8 @@ impl<'c> CodeGen<'c> {
         }
     }
 
+    fn gen_assign_stmt(&self, stmt: &AssignStmt) {}
+
     fn gen_return_stmt(&self, expr: &Expr) {
         let result = self.gen_expr(expr);
         self.builder
@@ -167,6 +173,10 @@ impl<'c> CodeGen<'c> {
             Expr::Int32(n) => {
                 let llvm_ty = self.context.i32_type();
                 return (llvm_ty.const_int(*n as u64, false).into(), DataType::Int32);
+            }
+            Expr::Float32(n) => {
+                let llvm_ty = self.context.f32_type();
+                return (llvm_ty.const_float(*n as f64).into(), DataType::Float32);
             }
             Expr::String(_) => todo!(),
             Expr::Bool(b) => {
@@ -248,6 +258,51 @@ impl<'c> CodeGen<'c> {
 
                 return (result.into(), DataType::Int32);
             }
+            (BasicValueEnum::FloatValue(l), BasicValueEnum::FloatValue(r)) => {
+                let result: BasicValueEnum = match op {
+                    BinaryOp::Add => self.builder.build_float_add(l, r, "addtmp").unwrap().into(),
+                    BinaryOp::Sub => self.builder.build_float_sub(l, r, "subtmp").unwrap().into(),
+                    BinaryOp::Mul => self.builder.build_float_mul(l, r, "multmp").unwrap().into(),
+                    BinaryOp::Div => self.builder.build_float_div(l, r, "divtmp").unwrap().into(),
+                    BinaryOp::Modulo => self
+                        .builder
+                        .build_float_rem(l, r, "remtemp")
+                        .unwrap()
+                        .into(),
+                    BinaryOp::Less => self
+                        .builder
+                        .build_float_compare(FloatPredicate::OLT, l, r, "cmptmp")
+                        .unwrap()
+                        .into(),
+                    BinaryOp::Greater => self
+                        .builder
+                        .build_float_compare(FloatPredicate::OGT, l, r, "cmptmp")
+                        .unwrap()
+                        .into(),
+                    BinaryOp::LessEqual => self
+                        .builder
+                        .build_float_compare(FloatPredicate::OLE, l, r, "cmptmp")
+                        .unwrap()
+                        .into(),
+                    BinaryOp::GreaterEqual => self
+                        .builder
+                        .build_float_compare(FloatPredicate::OGE, l, r, "cmptmp")
+                        .unwrap()
+                        .into(),
+                    BinaryOp::EqualEqual => self
+                        .builder
+                        .build_float_compare(FloatPredicate::OEQ, l, r, "cmptmp")
+                        .unwrap()
+                        .into(),
+                    BinaryOp::NotEqual => self
+                        .builder
+                        .build_float_compare(FloatPredicate::ONE, l, r, "cmptmp")
+                        .unwrap()
+                        .into(),
+                    _ => todo!(),
+                };
+                return (result.into(), DataType::Float32);
+            }
             _ => todo!(),
         }
     }
@@ -277,6 +332,7 @@ impl<'c> CodeGen<'c> {
     fn create_llvm_type(&self, dt: DataType) -> Option<BasicTypeEnum<'c>> {
         match dt {
             DataType::Int32 => Some(self.context.i32_type().into()),
+            DataType::Float32 => Some(self.context.f32_type().into()),
             DataType::Bool => Some(self.context.bool_type().into()),
             _ => None,
         }
@@ -291,8 +347,9 @@ impl<'c> CodeGen<'c> {
         match data_type {
             DataType::Int32 => self.context.i32_type().fn_type(param_types, is_var_args),
             DataType::Bool => self.context.bool_type().fn_type(param_types, is_var_args),
-            DataType::String => todo!(),
             DataType::Void => self.context.void_type().fn_type(param_types, is_var_args),
+            DataType::Float32 => self.context.f32_type().fn_type(param_types, is_var_args),
+            DataType::String => todo!(),
         }
     }
 

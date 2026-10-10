@@ -127,6 +127,7 @@ impl Semantic {
     fn analyze_expr(&mut self, expr: &mut Expr) -> Result<ExprData, String> {
         match expr {
             Expr::Int32(_) => Ok(ExprData::new(None, DataType::Int32)),
+            Expr::Float32(_) => Ok(ExprData::new(None, DataType::Float32)),
             Expr::String(_) => Ok(ExprData::new(None, DataType::String)),
             Expr::Bool(_) => Ok(ExprData::new(None, DataType::Bool)),
 
@@ -163,13 +164,13 @@ impl Semantic {
         match op {
             // arithmetic
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Modulo => {
-                if lhs == DataType::Int32 && rhs == DataType::Int32 {
-                    Ok(DataType::Int32)
-                } else {
-                    Err(format!(
+                match (lhs, rhs) {
+                    (DataType::Int32, DataType::Int32) => Ok(DataType::Int32),
+                    (DataType::Float32, DataType::Float32) => Ok(DataType::Float32),
+                    _ => Err(format!(
                         "operator {:?} requires both operands to be Int32, found LHS({:?}) and RHS({:?})",
                         op, lhs, rhs
-                    ))
+                    )),
                 }
             }
 
