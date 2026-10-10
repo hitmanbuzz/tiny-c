@@ -84,13 +84,14 @@ impl Semantic {
     }
 
     fn analyze_var(&mut self, vs: &mut VarStmt, is_global: bool) -> Result<(), String> {
-        let scope = self.analyze_expr(&mut vs.value)?;
-
-        if vs.data_type != scope.data_type && scope.data_type != DataType::Void {
-            return Err(format!(
-                "incompatible var data type and var expr type: '{:?}' != '{:?}'",
-                vs.data_type, scope.data_type,
-            ));
+        if let Some(ref mut value) = vs.value {
+            let scope = self.analyze_expr(value)?;
+            if vs.data_type != scope.data_type && scope.data_type != DataType::Void {
+                return Err(format!(
+                    "incompatible var data type and var expr type: '{:?}' != '{:?}'",
+                    vs.data_type, scope.data_type,
+                ));
+            }
         }
 
         let id = self.declare(vs.name.clone(), vs.data_type)?;
@@ -149,8 +150,6 @@ impl Semantic {
 
                 Ok(ExprData::new(None, result_type))
             }
-            // FIX: remove `Empty` type from Expr and use instead Option<T> where `T` is expr
-            Expr::Empty => Ok(ExprData::new(None, DataType::Void)),
         }
     }
 

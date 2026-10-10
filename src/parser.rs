@@ -110,7 +110,7 @@ impl Parser {
             Token::SemiColon => Ok(Decl::Var(VarStmt {
                 data_type,
                 name,
-                value: Expr::Empty,
+                value: None,
                 id: None,
                 is_global: false,
             })),
@@ -145,7 +145,7 @@ impl Parser {
         return Ok(VarStmt {
             data_type: data_type,
             name: name.to_string(),
-            value: expr,
+            value: Some(expr),
             id: None,
             is_global: false,
         });
@@ -584,10 +584,13 @@ mod tests {
         }
     }
 
-    fn expect_int32(expr: &Expr, expected: i32) {
+    fn expect_int32(expr: Option<&Expr>, expected: i32) {
         match expr {
-            Expr::Int32(n) => assert_eq!(*n, expected, "int32 literal mismatch"),
-            other => panic!("expected Int32({}), got {:?}", expected, other),
+            Some(e) => match e {
+                Expr::Int32(n) => assert_eq!(*n, expected, "int32 literal mismatch"),
+                other => panic!("expected Int32({}), got {:?}", expected, other),
+            },
+            None => panic!("expected Int32({}), got None", expected),
         }
     }
 
@@ -600,13 +603,16 @@ mod tests {
         }
     }
 
-    fn expect_binary(expr: &Expr, expected_op: BinaryOp) -> &BinaryExpr {
+    fn expect_binary(expr: Option<&Expr>, expected_op: BinaryOp) -> &BinaryExpr {
         match expr {
-            Expr::BinaryExpr(b) => {
-                assert_eq!(b.op, expected_op, "binary op mismatch");
-                b
-            }
-            other => panic!("expected BinaryExpr({:?}), got {:?}", expected_op, other),
+            Some(e) => match e {
+                Expr::BinaryExpr(b) => {
+                    assert_eq!(b.op, expected_op, "binary op mismatch");
+                    b
+                }
+                other => panic!("expected BinaryExpr({:?}), got {:?}", expected_op, other),
+            },
+            None => panic!("expected BinaryExpr({:?}), got None", expected_op),
         }
     }
 
@@ -644,7 +650,7 @@ mod tests {
         assert_eq!(func.body.stmts.len(), 1, "body should have exactly 1 stmt");
 
         match &func.body.stmts[0] {
-            Stmt::Return(expr) => expect_int32(expr, 69),
+            Stmt::Return(expr) => expect_int32(Some(expr), 69),
             other => panic!("expected Return stmt, got {:?}", other),
         }
     }
@@ -690,7 +696,7 @@ mod tests {
             Stmt::Var(v) => {
                 assert_eq!(v.data_type, DataType::Int32);
                 assert_eq!(v.name, "a");
-                expect_int32(&v.value, 67);
+                expect_int32(v.value.as_ref(), 67);
                 assert!(v.id.is_none(), "parser should not assign an id");
                 assert!(!v.is_global, "local var should not be global");
             }
@@ -698,7 +704,7 @@ mod tests {
         }
 
         match &func.body.stmts[1] {
-            Stmt::Return(expr) => expect_int32(expr, 69),
+            Stmt::Return(expr) => expect_int32(Some(expr), 69),
             other => panic!("expected Return stmt, got {:?}", other),
         }
     }
@@ -747,7 +753,8 @@ mod tests {
             Stmt::Var(v) => {
                 assert_eq!(v.data_type, DataType::Int32);
                 assert_eq!(v.name, "x");
-                expect_int32(&v.value, 69);
+                let expr = &v.value;
+                expect_int32(expr.as_ref(), 69);
                 assert!(v.id.is_none());
                 assert!(!v.is_global);
             }
@@ -757,7 +764,7 @@ mod tests {
         match &func.body.stmts[1] {
             Stmt::Assign(a) => {
                 expect_ident(&a.target, "x");
-                expect_int32(&a.value, 67);
+                expect_int32(Some(&a.value), 67);
             }
             other => panic!("expected Assign stmt, got {:?}", other),
         }
@@ -838,11 +845,11 @@ mod tests {
         //      1   +
         //         / \
         //        2   3
-        let mul = expect_binary(a_value, BinaryOp::Mul);
-        expect_int32(&mul.left, 1);
-        let add = expect_binary(&mul.right, BinaryOp::Add);
-        expect_int32(&add.left, 2);
-        expect_int32(&add.right, 3);
+        let mul = expect_binary(a_value.as_ref(), BinaryOp::Mul);
+        expect_int32(Some(&mul.left), 1);
+        let add = expect_binary(Some(&mul.right), BinaryOp::Add);
+        expect_int32(Some(&add.left), 2);
+        expect_int32(Some(&add.right), 3);
 
         let b_value = match &func.body.stmts[1] {
             Stmt::Var(v) => {
@@ -866,21 +873,21 @@ mod tests {
         //           / \
         //          2   3
 
-        let sub = expect_binary(b_value, BinaryOp::Sub);
-        expect_int32(&sub.right, 7);
+        let sub = expect_binary(b_value.as_ref(), BinaryOp::Sub);
+        expect_int32(Some(&sub.right), 7);
 
-        let outer_add = expect_binary(&sub.left, BinaryOp::Add);
-        let div = expect_binary(&outer_add.right, BinaryOp::Div);
-        expect_int32(&div.left, 5);
-        expect_int32(&div.right, 6);
+        let outer_add = expect_binary(Some(&sub.left), BinaryOp::Add);
+        let div = expect_binary(Some(&outer_add.right), BinaryOp::Div);
+        expect_int32(Some(&div.left), 5);
+        expect_int32(Some(&div.right), 6);
 
-        let inner_add = expect_binary(&outer_add.left, BinaryOp::Add);
-        expect_int32(&inner_add.left, 1);
-        let mul_outer = expect_binary(&inner_add.right, BinaryOp::Mul);
-        expect_int32(&mul_outer.right, 4);
+        let inner_add = expect_binary(Some(&outer_add.left), BinaryOp::Add);
+        expect_int32(Some(&inner_add.left), 1);
+        let mul_outer = expect_binary(Some(&inner_add.right), BinaryOp::Mul);
+        expect_int32(Some(&mul_outer.right), 4);
 
-        let mul_inner = expect_binary(&mul_outer.left, BinaryOp::Mul);
-        expect_int32(&mul_inner.left, 2);
-        expect_int32(&mul_inner.right, 3);
+        let mul_inner = expect_binary(Some(&mul_outer.left), BinaryOp::Mul);
+        expect_int32(Some(&mul_inner.left), 2);
+        expect_int32(Some(&mul_inner.right), 3);
     }
 }

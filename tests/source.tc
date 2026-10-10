@@ -1,6 +1,5 @@
 int main() {
-	float x = 1.0;
-	float y = 2.0;
-	float result = x + y;
-	return 69;
+	int x;
+	x = 50;
+	return x;
 }

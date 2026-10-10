@@ -121,7 +121,6 @@ impl<'c> CodeGen<'c> {
     }
 
     fn gen_stmt(&mut self, stmt: &Stmt) {
-        // TODO: time to make another SymbolTable 😭
         match stmt {
             Stmt::Return(expr) => self.gen_return_stmt(expr),
             Stmt::Var(stmt) => self.gen_var_stmt(stmt),
@@ -137,18 +136,20 @@ impl<'c> CodeGen<'c> {
                 .build_alloca(ty, &vs.name)
                 .expect(format!("failed to build alloca: {}", &vs.name).as_str());
 
-            let result = self.gen_expr(&vs.value);
-            self.builder
-                .build_store(ptr, result.0)
-                .expect(format!("failed to build store: {}", &vs.name).as_str());
-
             let alloca_name = self.create_alloca_name(
                 &vs.name,
                 vs.id
                     .expect(format!("failed to get symbol id: {}", &vs.name).as_str()),
             );
 
-            self.delcare(alloca_name, ptr, ty);
+            if let Some(value) = &vs.value {
+                let result = self.gen_expr(value);
+                self.builder
+                    .build_store(ptr, result.0)
+                    .expect(format!("failed to build store: {}", &vs.name).as_str());
+            }
+
+            self.declare(alloca_name, ptr, ty);
         } else {
             eprintln!(
                 "invalid variable data type declaration: {:?}({})",
@@ -159,7 +160,26 @@ impl<'c> CodeGen<'c> {
         }
     }
 
-    fn gen_assign_stmt(&self, stmt: &AssignStmt) {}
+    fn gen_assign_stmt(&self, stmt: &AssignStmt) {
+        if let Expr::Ident(ident) = &stmt.target {
+            let alloca_name = self.create_alloca_name(
+                &ident.name,
+                ident
+                    .id
+                    .expect(format!("failed to get symbol id: {}", &ident.name).as_str()),
+            );
+
+            let info = self
+                .lookup(&alloca_name)
+                .expect(format!("failed to lookup ident: {}", &ident.name).as_str());
+            let value = self.gen_expr(&stmt.value);
+            self.builder
+                .build_store(info.ptr, value.0)
+                .expect(format!("failed to build store: {}", &ident.name).as_str());
+        } else {
+            unreachable!("semantic analysis fuck up checking the LHS properly");
+        }
+    }
 
     fn gen_return_stmt(&self, expr: &Expr) {
         let result = self.gen_expr(expr);
@@ -205,7 +225,6 @@ impl<'c> CodeGen<'c> {
                 );
             }
             Expr::BinaryExpr(expr) => self.gen_binary_expr(expr),
-            Expr::Empty => todo!(),
         }
     }
 
@@ -315,7 +334,7 @@ impl<'c> CodeGen<'c> {
         self.symbols.pop();
     }
 
-    fn delcare(&mut self, name: String, ptr: PointerValue<'c>, ty: BasicTypeEnum<'c>) {
+    fn declare(&mut self, name: String, ptr: PointerValue<'c>, ty: BasicTypeEnum<'c>) {
         self.symbols
             .last_mut()
             .expect("forgot to create/push scope")
