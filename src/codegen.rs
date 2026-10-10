@@ -102,22 +102,19 @@ impl<'c> CodeGen<'c> {
     }
 
     fn gen_fn(&mut self, fd: &FunctionDef) {
+        self.push_scope();
         let fn_type = self.create_fn_type(fd.return_type, &[], false);
         let function = self.module.add_function(&fd.name, fn_type, None);
         let entry_block = self.context.append_basic_block(function, "entry");
         self.builder.position_at_end(entry_block);
         self.gen_body(&fd.body);
+        self.pop_scope();
     }
 
     fn gen_body(&mut self, body: &Block) {
-        // FIX: function body should also be in the symbol table
-        self.push_scope();
-
         for stmt in body.stmts.iter() {
             self.gen_stmt(stmt);
         }
-
-        self.pop_scope();
     }
 
     fn gen_stmt(&mut self, stmt: &Stmt) {
