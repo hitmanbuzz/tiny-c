@@ -2,18 +2,19 @@ use std::{collections::HashMap, path::Path, process::exit};
 
 use inkwell::{
     FloatPredicate, IntPredicate,
+    basic_block::BasicBlock,
     builder::Builder,
     context::Context,
     module::Module,
     types::{BasicMetadataTypeEnum, BasicTypeEnum, FunctionType},
-    values::{BasicValueEnum, PointerValue},
+    values::{BasicValueEnum, FunctionValue, IntValue, PointerValue},
 };
 
 use crate::{
     ast::{
-        AssignStmt, Ast, BinaryExpr, BinaryOp, Block,
+        AssignStmt, Ast, BinaryExpr, BinaryOp, Body,
         Decl::{self, FuncDef, Var},
-        Expr, FunctionDef, Stmt, VarStmt,
+        Expr, FunctionDef, IfStmt, Stmt, VarStmt,
     },
     types::DataType,
 };
@@ -21,6 +22,11 @@ use crate::{
 struct AllocaInfo<'c> {
     ptr: PointerValue<'c>,
     ty: BasicTypeEnum<'c>,
+}
+
+struct BlockData<'b> {
+    cond_expr: Option<&'b Expr>,
+    body: &'b Body,
 }
 
 struct Scope<'c> {
@@ -76,6 +82,7 @@ impl<'c> CodeGen<'c> {
 
         if let Err(err) = self.module.verify() {
             eprintln!("Module Verification failed: {:?}", err);
+            eprintln!("{}", self.module.print_to_string().to_string());
             exit(-1);
         }
     }
@@ -107,22 +114,22 @@ impl<'c> CodeGen<'c> {
         let function = self.module.add_function(&fd.name, fn_type, None);
         let entry_block = self.context.append_basic_block(function, "entry");
         self.builder.position_at_end(entry_block);
-        self.gen_body(&fd.body);
+        self.gen_body(&fd.body, &function);
         self.pop_scope();
     }
 
-    fn gen_body(&mut self, body: &Block) {
+    fn gen_body(&mut self, body: &Body, function: &FunctionValue) {
         for stmt in body.stmts.iter() {
-            self.gen_stmt(stmt);
+            self.gen_stmt(stmt, function);
         }
     }
 
-    fn gen_stmt(&mut self, stmt: &Stmt) {
+    fn gen_stmt(&mut self, stmt: &Stmt, function: &FunctionValue) {
         match stmt {
             Stmt::Return(expr) => self.gen_return_stmt(expr),
             Stmt::Var(stmt) => self.gen_var_stmt(stmt),
             Stmt::Assign(stmt) => self.gen_assign_stmt(stmt),
-            Stmt::IfStmt(stmt) => todo!(),
+            Stmt::IfStmt(stmt) => self.gen_if_stmt(stmt, function),
         }
     }
 
@@ -183,6 +190,120 @@ impl<'c> CodeGen<'c> {
         self.builder
             .build_return(Some(&result.0))
             .expect("failed to build return");
+    }
+
+    fn gen_if_stmt(&mut self, stmt: &IfStmt, function: &FunctionValue) {
+        let mut blocks = Vec::<BlockData>::new();
+        for branches in stmt.branches.iter() {
+            blocks.push(BlockData {
+                cond_expr: Some(&branches.cond_expr),
+                body: &branches.body,
+            });
+        }
+
+        if let Some(else_body) = &stmt.else_stmt {
+            blocks.push(BlockData {
+                cond_expr: None,
+                body: else_body,
+            });
+        }
+
+        self.gen_block(&blocks, function);
+    }
+
+    fn gen_block(&mut self, blocks: &Vec<BlockData>, function: &FunctionValue) {
+        if blocks.len() == 1 && blocks[0].cond_expr.is_none() {
+            for stmt in blocks[0].body.stmts.iter() {
+                self.gen_stmt(stmt, function);
+            }
+            return;
+        }
+
+        if blocks.is_empty() {
+            return;
+        }
+
+        let n = blocks.len();
+
+        // `merge_bb` is like the branch after if, else if and else is done
+        // usually the continuation of `entry` branch
+        let merge_bb = self.context.append_basic_block(*function, "if_merge");
+        let mut cond_blocks: Vec<Option<BasicBlock>> = Vec::with_capacity(n);
+        let mut body_blocks: Vec<BasicBlock> = Vec::with_capacity(n);
+
+        for i in 0..n {
+            let body_bb = self.context.append_basic_block(*function, "if_body");
+            body_blocks.push(body_bb);
+
+            if blocks[i].cond_expr.is_some() {
+                let cond_bb = self.context.append_basic_block(*function, "if_cond");
+                cond_blocks.push(Some(cond_bb));
+            } else {
+                cond_blocks.push(None);
+            }
+        }
+
+        let first_cond = cond_blocks[0].expect("first BlockData must have a cond_expr");
+
+        if self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_terminator()
+            .is_none()
+        {
+            self.builder.build_unconditional_branch(first_cond).unwrap();
+        }
+
+        for i in 0..n {
+            let entry = &blocks[i];
+
+            if let Some(cond_expr) = entry.cond_expr {
+                let cond_bb = cond_blocks[i].unwrap();
+                self.builder.position_at_end(cond_bb);
+
+                let (cond_val, _) = self.gen_expr(cond_expr);
+                let cond_i1 = self.to_bool(cond_val);
+
+                // go to `else branch` if `cond_blocks` has no next branch
+                let false_target = if i + 1 < n {
+                    match cond_blocks[i + 1] {
+                        Some(next_cond_bb) => next_cond_bb,
+                        None => body_blocks[i + 1],
+                    }
+                } else {
+                    merge_bb
+                };
+
+                let true_target = body_blocks[i];
+
+                self.builder
+                    .build_conditional_branch(cond_i1, true_target, false_target)
+                    .unwrap();
+            } else {
+                assert!(
+                    i > 0,
+                    "else block cannot be the first entry, fuck the parser and semantic analysis"
+                );
+            }
+
+            self.builder.position_at_end(body_blocks[i]);
+            for stmt in entry.body.stmts.iter() {
+                self.gen_stmt(stmt, function);
+            }
+
+            if self
+                .builder
+                .get_insert_block()
+                .unwrap()
+                .get_terminator()
+                .is_none()
+            {
+                self.builder.build_unconditional_branch(merge_bb).unwrap();
+            }
+        }
+
+        self.builder.position_at_end(merge_bb);
     }
 
     fn gen_expr(&self, expr: &Expr) -> (BasicValueEnum<'c>, DataType) {
@@ -320,6 +441,28 @@ impl<'c> CodeGen<'c> {
                 return (result.into(), DataType::Float32);
             }
             _ => todo!(),
+        }
+    }
+
+    fn to_bool(&self, value: BasicValueEnum<'c>) -> IntValue<'c> {
+        match value {
+            BasicValueEnum::IntValue(v) => {
+                if v.get_type().get_bit_width() == 1 {
+                    v
+                } else {
+                    let zero = v.get_type().const_zero();
+                    self.builder
+                        .build_int_compare(IntPredicate::NE, v, zero, "tobool")
+                        .unwrap()
+                }
+            }
+            BasicValueEnum::FloatValue(v) => {
+                let zero = v.get_type().const_zero();
+                self.builder
+                    .build_float_compare(inkwell::FloatPredicate::ONE, v, zero, "tobool")
+                    .unwrap()
+            }
+            other => panic!("cannot use {:?} as a boolean", other),
         }
     }
 

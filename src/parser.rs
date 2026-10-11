@@ -2,7 +2,7 @@ use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
     ast::{
-        AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, IfBranch, IfStmt,
+        AssignStmt, Ast, BinaryExpr, Body, Decl, Expr, FunctionDef, IdentExpr, IfBranch, IfStmt,
         Stmt, VarStmt,
     },
     token::{
@@ -183,7 +183,7 @@ impl Parser {
             }
         };
 
-        let block = self.parse_block()?;
+        let block = self.parse_body()?;
         curr = self.next();
         match curr.token {
             Token::RightCurlyBr => {}
@@ -204,8 +204,8 @@ impl Parser {
         });
     }
 
-    fn parse_block(&mut self) -> Result<Block, ParseError> {
-        let mut block = Block { stmts: Vec::new() };
+    fn parse_body(&mut self) -> Result<Body, ParseError> {
+        let mut block = Body { stmts: Vec::new() };
 
         while self.peek().token != Token::RightCurlyBr && self.peek().token != Token::Eof {
             block.stmts.push(self.parse_stmt()?);
@@ -278,7 +278,7 @@ impl Parser {
 
         loop {
             if let Token::Identifier(name) = &self.peek().token {
-                if name == "else" {
+                if name != "else" {
                     break;
                 }
             }
@@ -299,7 +299,7 @@ impl Parser {
         return Ok(Stmt::IfStmt(stmt));
     }
 
-    fn parse_else_stmt(&mut self) -> Result<Block, ParseError> {
+    fn parse_else_stmt(&mut self) -> Result<Body, ParseError> {
         let mut curr = self.next();
         if curr.token != Token::LeftCurlyBr {
             return Err(ParseError {
@@ -312,7 +312,7 @@ impl Parser {
             });
         }
 
-        let body = self.parse_block()?;
+        let body = self.parse_body()?;
 
         curr = self.next();
         if curr.token != Token::RightCurlyBr {
@@ -326,7 +326,7 @@ impl Parser {
             });
         }
 
-        return Ok(Block { stmts: body.stmts });
+        return Ok(Body { stmts: body.stmts });
     }
 
     fn parse_if_stmt_branch(&mut self) -> Result<IfBranch, ParseError> {
@@ -344,7 +344,7 @@ impl Parser {
             });
         }
 
-        let body = self.parse_block()?;
+        let body = self.parse_body()?;
 
         curr = self.next();
         if curr.token != Token::RightCurlyBr {

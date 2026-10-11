@@ -125,6 +125,12 @@ impl<'s> Semantic<'s> {
             }
         }
 
+        if let Some(else_body) = &mut stmt.else_stmt {
+            for stmt in else_body.stmts.iter_mut() {
+                self.analyze_stmt(stmt, fd_type)?;
+            }
+        }
+
         Ok(())
     }
 

@@ -43,7 +43,7 @@ pub struct FunctionDef {
     pub return_type: DataType,
     pub name: String,
     pub params: Vec<Param>,
-    pub body: Block,
+    pub body: Body,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -53,7 +53,7 @@ pub struct Param {
 }
 
 #[derive(Debug)]
-pub struct Block {
+pub struct Body {
     pub stmts: Vec<Stmt>,
 }
 
@@ -100,13 +100,13 @@ pub enum BinaryOp {
 #[derive(Debug)]
 pub struct IfStmt {
     pub branches: Vec<IfBranch>,
-    pub else_stmt: Option<Block>,
+    pub else_stmt: Option<Body>,
 }
 
 #[derive(Debug)]
 pub struct IfBranch {
     pub cond_expr: Expr,
-    pub body: Block,
+    pub body: Body,
 }
 
 #[derive(Debug)]
