@@ -270,15 +270,19 @@ impl Parser {
         stmt.branches.push(self.parse_if_stmt_branch()?);
 
         loop {
-            if !self.is_keyword("else") {
-                break;
+            if let Token::Identifier(name) = &self.peek().token {
+                if name == "else" {
+                    break;
+                }
             }
 
             self.next();
 
-            if self.is_keyword("if") {
-                self.next();
-                stmt.branches.push(self.parse_if_stmt_branch()?);
+            if let Token::Identifier(name) = &self.peek().token {
+                if name == "if" {
+                    self.next();
+                    stmt.branches.push(self.parse_if_stmt_branch()?);
+                }
             } else {
                 stmt.else_stmt = Some(self.parse_else_stmt()?);
                 break;
@@ -465,7 +469,7 @@ impl Parser {
         };
 
         loop {
-            match self.peek().token {
+            match &self.peek().token {
                 // FIX: EOF should not break always (it can return error)
                 Token::SemiColon | Token::RightParen | Token::LeftCurlyBr | Token::Eof => break,
                 Token::Plus
@@ -521,12 +525,14 @@ impl Parser {
         return self.tokens.next().unwrap_or(TokenData::default());
     }
 
-    fn peek(&mut self) -> TokenData {
-        return self.tokens.peek().unwrap_or(&TokenData::default()).clone();
-    }
+    fn peek(&mut self) -> &TokenData {
+        let curr = self.tokens.peek().unwrap_or(&TokenData {
+            token: Token::Eof,
+            line: 0,
+            pos: 0,
+        });
 
-    fn is_keyword(&mut self, keyword: &str) -> bool {
-        matches!(self.peek().token, Token::Identifier(name) if name == keyword)
+        return curr;
     }
 
     /// get keyword type from ident string

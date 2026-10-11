@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::Entry};
+use hashbrown::{HashMap, hash_map::EntryRef};
 
 use crate::{
     ast::{AssignStmt, Ast, BinaryOp, Decl, Expr, FunctionDef, IfStmt, Stmt, VarStmt},
@@ -94,7 +94,7 @@ impl Semantic {
             }
         }
 
-        let id = self.declare(vs.name.clone(), vs.data_type)?;
+        let id = self.declare(vs.name.as_str(), vs.data_type)?;
         vs.id = Some(id);
         vs.is_global = is_global;
         Ok(())
@@ -228,11 +228,11 @@ impl Semantic {
         }
     }
 
-    fn declare(&mut self, name: String, data_type: DataType) -> Result<usize, String> {
+    fn declare(&mut self, name: &str, data_type: DataType) -> Result<usize, String> {
         let scope = self.scopes.last_mut().unwrap();
-        match scope.entry(name) {
-            Entry::Occupied(entry) => Err(format!("redefinition of '{}'", entry.key())),
-            Entry::Vacant(entry) => {
+        match scope.entry_ref(name) {
+            EntryRef::Occupied(entry) => Err(format!("redefinition of '{}'", entry.key())),
+            EntryRef::Vacant(entry) => {
                 let id = self.id_counter;
                 self.id_counter += 1;
                 entry.insert(ExprData::new(Some(id), data_type));
