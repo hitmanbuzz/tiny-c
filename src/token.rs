@@ -1,6 +1,6 @@
 use crate::ast::BinaryOp;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     Plus,         // +
     Minus,        // -
@@ -49,7 +49,7 @@ pub enum Token {
     Eof,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TokenData {
     pub token: Token,
     pub line: usize,

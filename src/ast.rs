@@ -2,18 +2,18 @@ use std::fmt::{self, Display, Formatter};
 
 use crate::types::DataType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Ast {
     pub decls: Vec<Decl>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Decl {
     FuncDef(FunctionDef),
     Var(VarStmt),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Stmt {
     Return(Expr),
     Var(VarStmt),
@@ -21,14 +21,14 @@ pub enum Stmt {
     IfStmt(IfStmt),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IdentExpr {
     pub name: String,
     pub id: Option<usize>,
     pub data_type: Option<DataType>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Expr {
     Int32(i32),
     Float32(f32),
@@ -38,7 +38,7 @@ pub enum Expr {
     BinaryExpr(Box<BinaryExpr>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FunctionDef {
     pub return_type: DataType,
     pub name: String,
@@ -46,18 +46,18 @@ pub struct FunctionDef {
     pub body: Block,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
     pub p_type: DataType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VarStmt {
     pub data_type: DataType,
     pub name: String,
@@ -66,7 +66,7 @@ pub struct VarStmt {
     pub is_global: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AssignStmt {
     pub target: Expr,
     pub value: Expr,
@@ -97,19 +97,19 @@ pub enum BinaryOp {
     BitRS,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IfStmt {
     pub branches: Vec<IfBranch>,
     pub else_stmt: Option<Block>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct IfBranch {
     pub cond_expr: Expr,
     pub body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BinaryExpr {
     pub left: Expr,
     pub op: BinaryOp,
