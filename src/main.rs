@@ -39,15 +39,20 @@ fn main() {
     }
 
     let mut lexer = Lexer::new(&source_code);
-    lexer.tokenize();
+    if !lexer.tokenize() {
+        lexer.print_invalid();
+        return;
+    }
+
     // lexer.print();
 
     let mut parser = parser::Parser::new(lexer.tokens);
-    parser.parse();
+    if !parser.parse() {
+        return;
+    }
 
     let mut sym = Semantic::new();
-    let has_err = sym.analyze(&mut parser.ast);
-    if has_err {
+    if !sym.analyze(&mut parser.ast) {
         return;
     }
 

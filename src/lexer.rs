@@ -7,12 +7,14 @@ pub struct Lexer<'l> {
     source: Peekable<CharIndices<'l>>,
     line: usize,
     last_pos: usize,
+    has_no_err: bool,
 }
 
-struct LexError {
-    msg: String,
-    line: usize,
-    pos: usize,
+#[derive(Debug)]
+pub struct LexError {
+    pub msg: String,
+    pub line: usize,
+    pub pos: usize,
 }
 
 impl<'l> Lexer<'l> {
@@ -22,19 +24,19 @@ impl<'l> Lexer<'l> {
             source: source.char_indices().peekable(),
             line: 1,
             last_pos: source.len(),
+            has_no_err: true,
         }
     }
 
-    pub fn tokenize(&mut self) {
+    /// return `false` if it has invalid token
+    pub fn tokenize(&mut self) -> bool {
         while self.source.peek().is_some() {
             if let Err(e) = self.match_token() {
-                eprintln!(
-                    "[LEXER ERROR] [Line: {} | Pos: {}]: {}",
-                    e.line, e.pos, e.msg
-                );
+                eprintln!("{}", e);
             }
         }
         self.add_token(Token::Eof, self.last_pos);
+        return self.has_no_err;
     }
 
     fn match_token(&mut self) -> Result<(), LexError> {
@@ -164,6 +166,9 @@ impl<'l> Lexer<'l> {
                         return Ok(());
                     } else {
                         self.add_token(Token::Invalid(c.1), c.0);
+                        if self.has_no_err {
+                            self.has_no_err = false;
+                        };
                     }
                 }
             },

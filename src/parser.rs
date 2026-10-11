@@ -17,10 +17,11 @@ pub struct Parser {
     tokens: Peekable<IntoIter<TokenData>>,
 }
 
-struct ParseError {
-    msg: String,
-    line: usize,
-    pos: usize,
+#[derive(Debug)]
+pub struct ParseError {
+    pub msg: String,
+    pub line: usize,
+    pub pos: usize,
 }
 
 impl Parser {
@@ -31,18 +32,24 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) {
+    /// return `false` if there are errors in parsing
+    pub fn parse(&mut self) -> bool {
+        let mut has_no_err = true;
         while let curr = self.next()
             && curr.token != Token::Eof
         {
             match self.parse_node(curr) {
                 Ok(n) => self.ast.decls.push(n),
-                Err(e) => eprintln!(
-                    "[PARSER ERROR] [Line: {} | Pos: {}]: {}",
-                    e.line, e.pos, e.msg
-                ),
+                Err(e) => {
+                    if has_no_err {
+                        has_no_err = false;
+                    }
+                    eprintln!("{}", e)
+                }
             }
         }
+
+        return has_no_err;
     }
 
     fn parse_node(&mut self, curr: TokenData) -> Result<Decl, ParseError> {
@@ -211,8 +218,8 @@ impl Parser {
         let curr = self.next();
         let stmt = match curr.token {
             Token::Identifier(ident) => {
-                let Some(keyword) = self.get_keyword(&ident) else {
-                    return self.parse_assign_stmt(&ident);
+                let Some(keyword) = self.get_keyword(ident.as_str()) else {
+                    return self.parse_assign_stmt(ident.as_str());
                 };
 
                 match keyword {
@@ -535,7 +542,7 @@ impl Parser {
         return curr;
     }
 
-    /// get keyword type from ident string
+    /// get `keyword` from identifier `&str`
     fn get_keyword(&self, ident: &str) -> Option<Keyword> {
         match ident {
             "int" => Some(Keyword::Int),
