@@ -5,5 +5,4 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
-hashbrown = "0.17.1"
 inkwell = { version = "0.10.0", features = ["llvm22-1"] }

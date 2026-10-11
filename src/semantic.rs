@@ -1,4 +1,4 @@
-use hashbrown::{HashMap, hash_map::EntryRef};
+use std::collections::{HashMap, hash_map::Entry};
 
 use crate::{
     ast::{AssignStmt, Ast, BinaryOp, Decl, Expr, FunctionDef, IfStmt, Stmt, VarStmt},
@@ -18,12 +18,12 @@ impl ExprData {
 }
 
 #[derive(Debug)]
-pub struct Semantic {
-    scopes: Vec<HashMap<String, ExprData>>,
+pub struct Semantic<'s> {
+    scopes: Vec<HashMap<&'s str, ExprData>>,
     id_counter: usize,
 }
 
-impl Semantic {
+impl<'s> Semantic<'s> {
     pub fn new() -> Self {
         Self {
             scopes: Vec::new(),
@@ -32,7 +32,7 @@ impl Semantic {
     }
 
     /// return `false` if there are errors during analysis
-    pub fn analyze(&mut self, ast: &mut Ast) -> bool {
+    pub fn analyze(&mut self, ast: &'s mut Ast) -> bool {
         let mut has_no_err = true;
         // global scope
         self.entry_scope();
@@ -55,7 +55,7 @@ impl Semantic {
         return has_no_err;
     }
 
-    fn analyze_fn(&mut self, fd: &mut FunctionDef) -> Result<(), String> {
+    fn analyze_fn(&mut self, fd: &'s mut FunctionDef) -> Result<(), String> {
         // local scope
         self.entry_scope();
 
@@ -68,7 +68,7 @@ impl Semantic {
     }
 
     // fd_type: function definition return type
-    fn analyze_stmt(&mut self, stmt: &mut Stmt, fd_type: DataType) -> Result<(), String> {
+    fn analyze_stmt(&mut self, stmt: &'s mut Stmt, fd_type: DataType) -> Result<(), String> {
         match stmt {
             Stmt::Var(stmt) => self.analyze_var(stmt, false)?,
             Stmt::Assign(stmt) => self.analyze_assign(stmt)?,
@@ -86,7 +86,7 @@ impl Semantic {
         Ok(())
     }
 
-    fn analyze_var(&mut self, vs: &mut VarStmt, is_global: bool) -> Result<(), String> {
+    fn analyze_var(&mut self, vs: &'s mut VarStmt, is_global: bool) -> Result<(), String> {
         if let Some(ref mut value) = vs.value {
             let scope = self.analyze_expr(value)?;
             if vs.data_type != scope.data_type && scope.data_type != DataType::Void {
@@ -117,7 +117,7 @@ impl Semantic {
     }
 
     // fd_type: function definition return type
-    fn analyze_if_stmt(&mut self, stmt: &mut IfStmt, fd_type: DataType) -> Result<(), String> {
+    fn analyze_if_stmt(&mut self, stmt: &'s mut IfStmt, fd_type: DataType) -> Result<(), String> {
         for branch in stmt.branches.iter_mut() {
             self.analyze_expr(&mut branch.cond_expr)?;
             for stmt in branch.body.stmts.iter_mut() {
@@ -231,11 +231,11 @@ impl Semantic {
         }
     }
 
-    fn declare(&mut self, name: &str, data_type: DataType) -> Result<usize, String> {
+    fn declare(&mut self, name: &'s str, data_type: DataType) -> Result<usize, String> {
         let scope = self.scopes.last_mut().unwrap();
-        match scope.entry_ref(name) {
-            EntryRef::Occupied(entry) => Err(format!("redefinition of '{}'", entry.key())),
-            EntryRef::Vacant(entry) => {
+        match scope.entry(name) {
+            Entry::Occupied(entry) => Err(format!("redefinition of '{}'", entry.key())),
+            Entry::Vacant(entry) => {
                 let id = self.id_counter;
                 self.id_counter += 1;
                 entry.insert(ExprData::new(Some(id), data_type));
