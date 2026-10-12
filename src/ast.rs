@@ -2,18 +2,18 @@ use std::fmt::{self, Display, Formatter};
 
 use crate::types::DataType;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct Ast {
     pub decls: Vec<Decl>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub enum Decl {
     FuncDef(FunctionDef),
     Var(VarStmt),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub enum Stmt {
     Return(Expr),
     Var(VarStmt),
@@ -21,52 +21,52 @@ pub enum Stmt {
     IfStmt(IfStmt),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct IdentExpr {
     pub name: String,
     pub id: Option<usize>,
     pub data_type: Option<DataType>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub enum Expr {
     Int32(i32),
+    Float32(f32),
     String(String),
     Bool(bool),
     Ident(IdentExpr),
     BinaryExpr(Box<BinaryExpr>),
-    Empty,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct FunctionDef {
     pub return_type: DataType,
     pub name: String,
     pub params: Vec<Param>,
-    pub body: Block,
+    pub body: Body,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
     pub p_type: DataType,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Block {
+#[derive(Debug)]
+pub struct Body {
     pub stmts: Vec<Stmt>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct VarStmt {
     pub data_type: DataType,
     pub name: String,
-    pub value: Expr,
+    pub value: Option<Expr>,
     pub id: Option<usize>,
     pub is_global: bool,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct AssignStmt {
     pub target: Expr,
     pub value: Expr,
@@ -97,19 +97,19 @@ pub enum BinaryOp {
     BitRS,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct IfStmt {
     pub branches: Vec<IfBranch>,
-    pub else_stmt: Option<Block>,
+    pub else_stmt: Option<Body>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct IfBranch {
     pub cond_expr: Expr,
-    pub body: Block,
+    pub body: Body,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug)]
 pub struct BinaryExpr {
     pub left: Expr,
     pub op: BinaryOp,
@@ -170,7 +170,7 @@ fn fmt_decl(f: &mut Formatter<'_>, decl: &Decl, prefix: &str, last: bool) -> fmt
             writeln!(f, "{child_prefix}└── Value")?;
 
             let expr_prefix = format!("{child_prefix}    ");
-            fmt_expr(f, &var.value, &expr_prefix, true)?;
+            fmt_expr(f, var.value.as_ref(), &expr_prefix, true)?;
         }
     }
 
@@ -216,7 +216,7 @@ fn fmt_stmt(f: &mut Formatter<'_>, stmt: &Stmt, prefix: &str, last: bool) -> fmt
 
             let expr_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
 
-            fmt_expr(f, expr, &expr_prefix, true)?;
+            fmt_expr(f, Some(expr), &expr_prefix, true)?;
         }
 
         Stmt::Var(var) => {
@@ -231,7 +231,7 @@ fn fmt_stmt(f: &mut Formatter<'_>, stmt: &Stmt, prefix: &str, last: bool) -> fmt
             writeln!(f, "{child_prefix}└── Value")?;
 
             let expr_prefix = format!("{child_prefix}    ");
-            fmt_expr(f, &var.value, &expr_prefix, true)?;
+            fmt_expr(f, var.value.as_ref(), &expr_prefix, true)?;
         }
         Stmt::Assign(assign) => {
             writeln!(f, "{prefix}{branch}Assign")?;
@@ -242,12 +242,12 @@ fn fmt_stmt(f: &mut Formatter<'_>, stmt: &Stmt, prefix: &str, last: bool) -> fmt
 
             // Target is always followed by Value, so it's never the "last" child.
             let target_prefix = format!("{child_prefix}│   ");
-            fmt_expr(f, &assign.target, &target_prefix, true)?;
+            fmt_expr(f, Some(&assign.target), &target_prefix, true)?;
 
             writeln!(f, "{child_prefix}└── Value")?;
 
             let value_prefix = format!("{child_prefix}    ");
-            fmt_expr(f, &assign.value, &value_prefix, true)?;
+            fmt_expr(f, Some(&assign.value), &value_prefix, true)?;
         }
         Stmt::IfStmt(if_stmt) => {
             writeln!(f, "{prefix}{branch}IfStmt")?;
@@ -277,7 +277,7 @@ fn fmt_stmt(f: &mut Formatter<'_>, stmt: &Stmt, prefix: &str, last: bool) -> fmt
 
                 let condition_prefix = format!("{branch_prefix}│   ");
 
-                fmt_expr(f, &if_branch.cond_expr, &condition_prefix, true)?;
+                fmt_expr(f, Some(&if_branch.cond_expr), &condition_prefix, true)?;
 
                 // body
                 writeln!(f, "{branch_prefix}└── Body")?;
@@ -313,41 +313,45 @@ fn fmt_stmt(f: &mut Formatter<'_>, stmt: &Stmt, prefix: &str, last: bool) -> fmt
     Ok(())
 }
 
-fn fmt_expr(f: &mut Formatter<'_>, expr: &Expr, prefix: &str, last: bool) -> fmt::Result {
+fn fmt_expr(f: &mut Formatter<'_>, expr: Option<&Expr>, prefix: &str, last: bool) -> fmt::Result {
+    // Handle the None case first (e.g., a var decl with no initializer).
+    let expr = match expr {
+        Some(e) => e,
+        None => {
+            let branch = if last { "└── " } else { "├── " };
+            return writeln!(f, "{prefix}{branch}<none>");
+        }
+    };
+
     let branch = if last { "└── " } else { "├── " };
 
     match expr {
         Expr::Int32(value) => {
             writeln!(f, "{prefix}{branch}Int32: {value}")?;
         }
-
+        Expr::Float32(value) => {
+            writeln!(f, "{prefix}{branch}Float32: {value}")?;
+        }
         Expr::String(value) => {
             writeln!(f, "{prefix}{branch}String: {:?}", value)?;
         }
-
-        Expr::Ident(expr) => {
+        Expr::Ident(ident) => {
             writeln!(
                 f,
                 "{prefix}{branch}Ident: {}({:?}) - {:?}",
-                expr.name, expr.id, expr.data_type
+                ident.name, ident.id, ident.data_type
             )?;
         }
-
         Expr::Bool(value) => {
             writeln!(f, "{prefix}{branch}Bool: {}", value)?;
         }
-
-        Expr::Empty => {
-            writeln!(f, "{prefix}{branch}Empty")?;
-        }
-
         Expr::BinaryExpr(binary) => {
             writeln!(f, "{prefix}{branch}BinaryExpr: {:?}", binary.op)?;
 
             let child_prefix = format!("{prefix}{}", if last { "    " } else { "│   " });
 
-            fmt_expr(f, &binary.left, &child_prefix, false)?;
-            fmt_expr(f, &binary.right, &child_prefix, true)?;
+            fmt_expr(f, Some(&binary.left), &child_prefix, false)?;
+            fmt_expr(f, Some(&binary.right), &child_prefix, true)?;
         }
     }
 

@@ -2,7 +2,7 @@ use std::{iter::Peekable, vec::IntoIter};
 
 use crate::{
     ast::{
-        AssignStmt, Ast, BinaryExpr, Block, Decl, Expr, FunctionDef, IdentExpr, IfBranch, IfStmt,
+        AssignStmt, Ast, BinaryExpr, Body, Decl, Expr, FunctionDef, IdentExpr, IfBranch, IfStmt,
         Stmt, VarStmt,
     },
     token::{
@@ -17,10 +17,11 @@ pub struct Parser {
     tokens: Peekable<IntoIter<TokenData>>,
 }
 
-struct ParseError {
-    msg: String,
-    line: usize,
-    pos: usize,
+#[derive(Debug)]
+pub struct ParseError {
+    pub msg: String,
+    pub line: usize,
+    pub pos: usize,
 }
 
 impl Parser {
@@ -31,18 +32,24 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) {
+    /// return `false` if there are errors in parsing
+    pub fn parse(&mut self) -> bool {
+        let mut has_no_err = true;
         while let curr = self.next()
             && curr.token != Token::Eof
         {
             match self.parse_node(curr) {
                 Ok(n) => self.ast.decls.push(n),
-                Err(e) => eprintln!(
-                    "[PARSER ERROR] [Line: {} | Pos: {}]: {}",
-                    e.line, e.pos, e.msg
-                ),
+                Err(e) => {
+                    if has_no_err {
+                        has_no_err = false;
+                    }
+                    eprintln!("{}", e)
+                }
             }
         }
+
+        return has_no_err;
     }
 
     fn parse_node(&mut self, curr: TokenData) -> Result<Decl, ParseError> {
@@ -66,7 +73,7 @@ impl Parser {
             pos: curr.pos,
         })?;
 
-        let data_type = keyword.get_data_type().ok_or_else(|| ParseError {
+        let data_type = keyword.to_data_type().ok_or_else(|| ParseError {
             msg: format!(
                 "expected keyword data-type but found keyword: {:?}",
                 keyword
@@ -110,7 +117,7 @@ impl Parser {
             Token::SemiColon => Ok(Decl::Var(VarStmt {
                 data_type,
                 name,
-                value: Expr::Empty,
+                value: None,
                 id: None,
                 is_global: false,
             })),
@@ -145,7 +152,7 @@ impl Parser {
         return Ok(VarStmt {
             data_type: data_type,
             name: name.to_string(),
-            value: expr,
+            value: Some(expr),
             id: None,
             is_global: false,
         });
@@ -176,7 +183,7 @@ impl Parser {
             }
         };
 
-        let block = self.parse_block()?;
+        let block = self.parse_body()?;
         curr = self.next();
         match curr.token {
             Token::RightCurlyBr => {}
@@ -197,8 +204,8 @@ impl Parser {
         });
     }
 
-    fn parse_block(&mut self) -> Result<Block, ParseError> {
-        let mut block = Block { stmts: Vec::new() };
+    fn parse_body(&mut self) -> Result<Body, ParseError> {
+        let mut block = Body { stmts: Vec::new() };
 
         while self.peek().token != Token::RightCurlyBr && self.peek().token != Token::Eof {
             block.stmts.push(self.parse_stmt()?);
@@ -211,14 +218,18 @@ impl Parser {
         let curr = self.next();
         let stmt = match curr.token {
             Token::Identifier(ident) => {
-                let Some(keyword) = self.get_keyword(&ident) else {
-                    return self.parse_assign_stmt(&ident);
+                let Some(keyword) = self.get_keyword(ident.as_str()) else {
+                    return self.parse_assign_stmt(ident.as_str());
                 };
 
                 match keyword {
-                    Keyword::Int | Keyword::Bool | Keyword::String | Keyword::Void => {
+                    Keyword::Int
+                    | Keyword::Float
+                    | Keyword::Bool
+                    | Keyword::String
+                    | Keyword::Void => {
                         // this is guarantee to work (hehehe)
-                        let data_type = keyword.get_data_type().unwrap();
+                        let data_type = keyword.to_data_type().unwrap();
                         match self.parse_node_type(data_type)? {
                             Decl::FuncDef(fd) => Err(ParseError {
                                 msg: format!("unexpected function within a function: {:?}", fd),
@@ -266,15 +277,19 @@ impl Parser {
         stmt.branches.push(self.parse_if_stmt_branch()?);
 
         loop {
-            if !self.is_keyword("else") {
-                break;
+            if let Token::Identifier(name) = &self.peek().token {
+                if name != "else" {
+                    break;
+                }
             }
 
             self.next();
 
-            if self.is_keyword("if") {
-                self.next();
-                stmt.branches.push(self.parse_if_stmt_branch()?);
+            if let Token::Identifier(name) = &self.peek().token {
+                if name == "if" {
+                    self.next();
+                    stmt.branches.push(self.parse_if_stmt_branch()?);
+                }
             } else {
                 stmt.else_stmt = Some(self.parse_else_stmt()?);
                 break;
@@ -284,7 +299,7 @@ impl Parser {
         return Ok(Stmt::IfStmt(stmt));
     }
 
-    fn parse_else_stmt(&mut self) -> Result<Block, ParseError> {
+    fn parse_else_stmt(&mut self) -> Result<Body, ParseError> {
         let mut curr = self.next();
         if curr.token != Token::LeftCurlyBr {
             return Err(ParseError {
@@ -297,7 +312,7 @@ impl Parser {
             });
         }
 
-        let body = self.parse_block()?;
+        let body = self.parse_body()?;
 
         curr = self.next();
         if curr.token != Token::RightCurlyBr {
@@ -311,7 +326,7 @@ impl Parser {
             });
         }
 
-        return Ok(Block { stmts: body.stmts });
+        return Ok(Body { stmts: body.stmts });
     }
 
     fn parse_if_stmt_branch(&mut self) -> Result<IfBranch, ParseError> {
@@ -329,7 +344,7 @@ impl Parser {
             });
         }
 
-        let body = self.parse_block()?;
+        let body = self.parse_body()?;
 
         curr = self.next();
         if curr.token != Token::RightCurlyBr {
@@ -419,13 +434,23 @@ impl Parser {
                 }),
             },
             Token::Number(str) => {
-                let num = str.parse::<i32>().map_err(|_| ParseError {
-                    msg: format!("failed to parse `{}` to i32", str),
-                    line: curr.line,
-                    pos: curr.pos,
-                })?;
+                if str.contains(".") {
+                    let num = str.parse::<f32>().map_err(|_| ParseError {
+                        msg: format!("failed to parse `{}` to f32", str),
+                        line: curr.line,
+                        pos: curr.pos,
+                    })?;
 
-                Expr::Int32(num)
+                    Expr::Float32(num)
+                } else {
+                    let num = str.parse::<i32>().map_err(|_| ParseError {
+                        msg: format!("failed to parse `{}` to i32", str),
+                        line: curr.line,
+                        pos: curr.pos,
+                    })?;
+
+                    Expr::Int32(num)
+                }
             }
             Token::LeftParen => {
                 let expr = self.parse_expr(0.0)?;
@@ -451,7 +476,7 @@ impl Parser {
         };
 
         loop {
-            match self.peek().token {
+            match &self.peek().token {
                 // FIX: EOF should not break always (it can return error)
                 Token::SemiColon | Token::RightParen | Token::LeftCurlyBr | Token::Eof => break,
                 Token::Plus
@@ -507,18 +532,21 @@ impl Parser {
         return self.tokens.next().unwrap_or(TokenData::default());
     }
 
-    fn peek(&mut self) -> TokenData {
-        return self.tokens.peek().unwrap_or(&TokenData::default()).clone();
+    fn peek(&mut self) -> &TokenData {
+        let curr = self.tokens.peek().unwrap_or(&TokenData {
+            token: Token::Eof,
+            line: 0,
+            pos: 0,
+        });
+
+        return curr;
     }
 
-    fn is_keyword(&mut self, keyword: &str) -> bool {
-        matches!(self.peek().token, Token::Identifier(name) if name == keyword)
-    }
-
-    /// get keyword type from ident string
+    /// get `keyword` from identifier `&str`
     fn get_keyword(&self, ident: &str) -> Option<Keyword> {
         match ident {
             "int" => Some(Keyword::Int),
+            "float" => Some(Keyword::Float),
             "void" => Some(Keyword::Void),
             "string" => Some(Keyword::String),
             "bool" => Some(Keyword::Bool),
@@ -532,11 +560,74 @@ impl Parser {
     }
 }
 
+// replace my hand written old stinking unit test cases with a AI one
+// my unit cases was kinda fuckup if it failed and debugging was a hell
 #[cfg(test)]
 mod tests {
     use crate::{ast::BinaryOp, lexer::Lexer};
 
     use super::*;
+
+    fn parse(source: &str) -> Ast {
+        let mut lexer = Lexer::new(source);
+        lexer.tokenize();
+        let mut parser = Parser::new(lexer.tokens);
+        parser.parse();
+        parser.ast
+    }
+
+    fn assert_tokens(actual: &[TokenData], expected: &[Token]) {
+        assert_eq!(
+            actual.len(),
+            expected.len(),
+            "token count mismatch: got {}, expected {}",
+            actual.len(),
+            expected.len()
+        );
+        for (i, (a, e)) in actual.iter().zip(expected.iter()).enumerate() {
+            assert_eq!(a.token, *e, "token mismatch at index {}", i);
+        }
+    }
+
+    fn single_function(ast: &Ast) -> &FunctionDef {
+        assert_eq!(ast.decls.len(), 1, "expected exactly one top-level decl");
+        match &ast.decls[0] {
+            Decl::FuncDef(f) => f,
+            other => panic!("expected FuncDef, got {:?}", other),
+        }
+    }
+
+    fn expect_int32(expr: Option<&Expr>, expected: i32) {
+        match expr {
+            Some(e) => match e {
+                Expr::Int32(n) => assert_eq!(*n, expected, "int32 literal mismatch"),
+                other => panic!("expected Int32({}), got {:?}", expected, other),
+            },
+            None => panic!("expected Int32({}), got None", expected),
+        }
+    }
+
+    fn expect_ident(expr: &Expr, expected_name: &str) {
+        match expr {
+            Expr::Ident(id) => {
+                assert_eq!(id.name, expected_name, "identifier name mismatch");
+            }
+            other => panic!("expected Ident({}), got {:?}", expected_name, other),
+        }
+    }
+
+    fn expect_binary(expr: Option<&Expr>, expected_op: BinaryOp) -> &BinaryExpr {
+        match expr {
+            Some(e) => match e {
+                Expr::BinaryExpr(b) => {
+                    assert_eq!(b.op, expected_op, "binary op mismatch");
+                    b
+                }
+                other => panic!("expected BinaryExpr({:?}), got {:?}", expected_op, other),
+            },
+            None => panic!("expected BinaryExpr({:?}), got None", expected_op),
+        }
+    }
 
     #[test]
     fn test_return_stmt() {
@@ -548,12 +639,7 @@ mod tests {
         let mut lexer = Lexer::new(source);
         lexer.tokenize();
 
-        assert!(
-            lexer.tokens.len() > 0,
-            "should have 10 tokens but got 0 instead"
-        );
-
-        let good_tokens: Vec<Token> = vec![
+        let good_tokens = vec![
             Token::Identifier("int".to_string()),
             Token::Identifier("main".to_string()),
             Token::LeftParen,
@@ -565,32 +651,21 @@ mod tests {
             Token::RightCurlyBr,
             Token::Eof,
         ];
+        assert_tokens(&lexer.tokens, &good_tokens);
 
-        assert_eq!(
-            lexer.tokens.len(),
-            good_tokens.len(),
-            "should have same 10 tokens"
-        );
+        let ast = parse(source);
 
-        for i in 0..lexer.tokens.len() {
-            assert_eq!(lexer.tokens[i].token, good_tokens[i]);
+        let func = single_function(&ast);
+        assert_eq!(func.name, "main");
+        assert_eq!(func.return_type, DataType::Int32);
+        assert!(func.params.is_empty(), "main should have no params");
+
+        assert_eq!(func.body.stmts.len(), 1, "body should have exactly 1 stmt");
+
+        match &func.body.stmts[0] {
+            Stmt::Return(expr) => expect_int32(Some(expr), 69),
+            other => panic!("expected Return stmt, got {:?}", other),
         }
-
-        let mut parser = Parser::new(lexer.tokens);
-        parser.parse();
-
-        let good_ast = Ast {
-            decls: vec![Decl::FuncDef(FunctionDef {
-                name: String::from("main"),
-                params: vec![],
-                body: Block {
-                    stmts: vec![Stmt::Return(Expr::Int32(69))],
-                },
-                return_type: DataType::Int32,
-            })],
-        };
-
-        assert_eq!(parser.ast, good_ast);
     }
 
     #[test]
@@ -604,12 +679,7 @@ mod tests {
         let mut lexer = Lexer::new(source);
         lexer.tokenize();
 
-        assert!(
-            lexer.tokens.len() > 0,
-            "should have 10 tokens but got 0 instead"
-        );
-
-        let good_tokens: Vec<Token> = vec![
+        let good_tokens = vec![
             Token::Identifier("int".to_string()),
             Token::Identifier("main".to_string()),
             Token::LeftParen,
@@ -626,62 +696,45 @@ mod tests {
             Token::RightCurlyBr,
             Token::Eof,
         ];
+        assert_tokens(&lexer.tokens, &good_tokens);
 
-        assert_eq!(
-            good_tokens.len(),
-            lexer.tokens.len(),
-            "should have same 15 tokens"
-        );
+        let ast = parse(source);
 
-        for i in 0..lexer.tokens.len() {
-            assert_eq!(good_tokens[i], lexer.tokens[i].token);
+        let func = single_function(&ast);
+        assert_eq!(func.name, "main");
+        assert_eq!(func.return_type, DataType::Int32);
+        assert_eq!(func.body.stmts.len(), 2);
+
+        match &func.body.stmts[0] {
+            Stmt::Var(v) => {
+                assert_eq!(v.data_type, DataType::Int32);
+                assert_eq!(v.name, "a");
+                expect_int32(v.value.as_ref(), 67);
+                assert!(v.id.is_none(), "parser should not assign an id");
+                assert!(!v.is_global, "local var should not be global");
+            }
+            other => panic!("expected Var stmt, got {:?}", other),
         }
 
-        let mut parser = Parser::new(lexer.tokens);
-        parser.parse();
-
-        let good_ast = Ast {
-            decls: vec![Decl::FuncDef(FunctionDef {
-                name: String::from("main"),
-                params: vec![],
-                body: Block {
-                    stmts: vec![
-                        Stmt::Var(VarStmt {
-                            data_type: DataType::Int32,
-                            name: String::from("a"),
-                            value: Expr::Int32(67),
-                            id: None,
-                            is_global: false,
-                        }),
-                        Stmt::Return(Expr::Int32(69)),
-                    ],
-                },
-                return_type: DataType::Int32,
-            })],
-        };
-
-        assert_eq!(parser.ast, good_ast);
+        match &func.body.stmts[1] {
+            Stmt::Return(expr) => expect_int32(Some(expr), 69),
+            other => panic!("expected Return stmt, got {:?}", other),
+        }
     }
 
     #[test]
     fn test_assign_stmt() {
         let source = "
-          int main() {
-             int x = 69;
-             x = 67;              
-             return x;
-          }  
+            int main() {
+                int x = 69;
+                x = 67;
+                return x;
+            }
         ";
-
         let mut lexer = Lexer::new(source);
         lexer.tokenize();
 
-        assert!(
-            lexer.tokens.len() > 0,
-            "should have 19 tokens but got 0 instead"
-        );
-
-        let good_tokens: Vec<Token> = vec![
+        let good_tokens = vec![
             Token::Identifier("int".to_string()),
             Token::Identifier("main".to_string()),
             Token::LeftParen,
@@ -702,68 +755,51 @@ mod tests {
             Token::RightCurlyBr,
             Token::Eof,
         ];
+        assert_tokens(&lexer.tokens, &good_tokens);
 
-        assert_eq!(
-            good_tokens.len(),
-            lexer.tokens.len(),
-            "should have same 19 tokens"
-        );
+        let ast = parse(source);
 
-        for i in 0..lexer.tokens.len() {
-            assert_eq!(good_tokens[i], lexer.tokens[i].token);
+        let func = single_function(&ast);
+        assert_eq!(func.body.stmts.len(), 3);
+
+        match &func.body.stmts[0] {
+            Stmt::Var(v) => {
+                assert_eq!(v.data_type, DataType::Int32);
+                assert_eq!(v.name, "x");
+                let expr = &v.value;
+                expect_int32(expr.as_ref(), 69);
+                assert!(v.id.is_none());
+                assert!(!v.is_global);
+            }
+            other => panic!("expected Var stmt, got {:?}", other),
         }
 
-        let mut parser = Parser::new(lexer.tokens);
-        parser.parse();
+        match &func.body.stmts[1] {
+            Stmt::Assign(a) => {
+                expect_ident(&a.target, "x");
+                expect_int32(Some(&a.value), 67);
+            }
+            other => panic!("expected Assign stmt, got {:?}", other),
+        }
 
-        let good_ast = Ast {
-            decls: vec![Decl::FuncDef(FunctionDef {
-                name: String::from("main"),
-                params: vec![],
-                body: Block {
-                    stmts: vec![
-                        Stmt::Var(VarStmt {
-                            data_type: DataType::Int32,
-                            name: String::from("x"),
-                            value: Expr::Int32(69),
-                            id: None,
-                            is_global: false,
-                        }),
-                        Stmt::Assign(AssignStmt {
-                            target: Expr::Ident(IdentExpr {
-                                name: "x".to_string(),
-                                id: None,
-                                data_type: None,
-                            }),
-                            value: Expr::Int32(67),
-                        }),
-                        Stmt::Return(Expr::Ident(IdentExpr {
-                            name: "x".to_string(),
-                            id: None,
-                            data_type: None,
-                        })),
-                    ],
-                },
-                return_type: DataType::Int32,
-            })],
-        };
-
-        assert_eq!(parser.ast, good_ast);
+        match &func.body.stmts[2] {
+            Stmt::Return(expr) => expect_ident(expr, "x"),
+            other => panic!("expected Return stmt, got {:?}", other),
+        }
     }
 
     #[test]
     fn test_binary_expr() {
         let source = "
-        int main() {
-            int a = 1 * (2 + 3);
-            int b = 1 + 2 * 3 * 4 + 5 / 6 - 7;
-        }
-    ";
-
+            int main() {
+                int a = 1 * (2 + 3);
+                int b = 1 + 2 * 3 * 4 + 5 / 6 - 7;
+            }
+        ";
         let mut lexer = Lexer::new(source);
         lexer.tokenize();
 
-        let good_tokens: Vec<Token> = vec![
+        let good_tokens = vec![
             Token::Identifier("int".to_string()),
             Token::Identifier("main".to_string()),
             Token::LeftParen,
@@ -801,79 +837,70 @@ mod tests {
             Token::Eof,
         ];
 
-        assert_eq!(
-            good_tokens.len(),
-            lexer.tokens.len(),
-            "should have same 35 tokens"
-        );
+        assert_tokens(&lexer.tokens, &good_tokens);
 
-        for i in 0..lexer.tokens.len() {
-            assert_eq!(good_tokens[i], lexer.tokens[i].token);
-        }
+        let ast = parse(source);
+        let func = single_function(&ast);
+        assert_eq!(func.body.stmts.len(), 2);
 
-        let mut parser = Parser::new(lexer.tokens);
-        parser.parse();
-
-        let good_ast = Ast {
-            decls: vec![Decl::FuncDef(FunctionDef {
-                name: "main".to_string(),
-                params: vec![],
-                body: Block {
-                    stmts: vec![
-                        Stmt::Var(VarStmt {
-                            data_type: DataType::Int32,
-                            name: "a".to_string(),
-
-                            // 1 * (2 + 3)
-                            value: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                left: Expr::Int32(1),
-                                op: BinaryOp::Mul,
-                                right: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                    left: Expr::Int32(2),
-                                    op: BinaryOp::Add,
-                                    right: Expr::Int32(3),
-                                })),
-                            })),
-                            id: None,
-                            is_global: false,
-                        }),
-                        Stmt::Var(VarStmt {
-                            data_type: DataType::Int32,
-                            name: "b".to_string(),
-                            value: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                left: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                    left: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                        left: Expr::Int32(1),
-                                        op: BinaryOp::Add,
-                                        right: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                            left: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                                left: Expr::Int32(2),
-                                                op: BinaryOp::Mul,
-                                                right: Expr::Int32(3),
-                                            })),
-                                            op: BinaryOp::Mul,
-                                            right: Expr::Int32(4),
-                                        })),
-                                    })),
-                                    op: BinaryOp::Add,
-                                    right: Expr::BinaryExpr(Box::new(BinaryExpr {
-                                        left: Expr::Int32(5),
-                                        op: BinaryOp::Div,
-                                        right: Expr::Int32(6),
-                                    })),
-                                })),
-                                op: BinaryOp::Sub,
-                                right: Expr::Int32(7),
-                            })),
-                            id: None,
-                            is_global: false,
-                        }),
-                    ],
-                },
-                return_type: DataType::Int32,
-            })],
+        let a_value = match &func.body.stmts[0] {
+            Stmt::Var(v) => {
+                assert_eq!(v.data_type, DataType::Int32);
+                assert_eq!(v.name, "a");
+                &v.value
+            }
+            other => panic!("expected Var stmt, got {:?}", other),
         };
 
-        assert_eq!(parser.ast, good_ast);
+        // Expected tree:
+        //        *
+        //       / \
+        //      1   +
+        //         / \
+        //        2   3
+        let mul = expect_binary(a_value.as_ref(), BinaryOp::Mul);
+        expect_int32(Some(&mul.left), 1);
+        let add = expect_binary(Some(&mul.right), BinaryOp::Add);
+        expect_int32(Some(&add.left), 2);
+        expect_int32(Some(&add.right), 3);
+
+        let b_value = match &func.body.stmts[1] {
+            Stmt::Var(v) => {
+                assert_eq!(v.data_type, DataType::Int32);
+                assert_eq!(v.name, "b");
+                &v.value
+            }
+            other => panic!("expected Var stmt, got {:?}", other),
+        };
+
+        // Expected tree:
+        //                 -
+        //                / \
+        //               +   7
+        //              / \
+        //             +   /
+        //            / \ / \
+        //           1  * 5  6
+        //             / \
+        //            *   4
+        //           / \
+        //          2   3
+
+        let sub = expect_binary(b_value.as_ref(), BinaryOp::Sub);
+        expect_int32(Some(&sub.right), 7);
+
+        let outer_add = expect_binary(Some(&sub.left), BinaryOp::Add);
+        let div = expect_binary(Some(&outer_add.right), BinaryOp::Div);
+        expect_int32(Some(&div.left), 5);
+        expect_int32(Some(&div.right), 6);
+
+        let inner_add = expect_binary(Some(&outer_add.left), BinaryOp::Add);
+        expect_int32(Some(&inner_add.left), 1);
+        let mul_outer = expect_binary(Some(&inner_add.right), BinaryOp::Mul);
+        expect_int32(Some(&mul_outer.right), 4);
+
+        let mul_inner = expect_binary(Some(&mul_outer.left), BinaryOp::Mul);
+        expect_int32(Some(&mul_inner.left), 2);
+        expect_int32(Some(&mul_inner.right), 3);
     }
 }

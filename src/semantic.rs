@@ -18,12 +18,12 @@ impl ExprData {
 }
 
 #[derive(Debug)]
-pub struct Semantic {
-    scopes: Vec<HashMap<String, ExprData>>,
+pub struct Semantic<'s> {
+    scopes: Vec<HashMap<&'s str, ExprData>>,
     id_counter: usize,
 }
 
-impl Semantic {
+impl<'s> Semantic<'s> {
     pub fn new() -> Self {
         Self {
             scopes: Vec::new(),
@@ -31,8 +31,9 @@ impl Semantic {
         }
     }
 
-    pub fn analyze(&mut self, ast: &mut Ast) -> bool {
-        let mut has_err = false;
+    /// return `false` if there are errors during analysis
+    pub fn analyze(&mut self, ast: &'s mut Ast) -> bool {
+        let mut has_no_err = true;
         // global scope
         self.entry_scope();
 
@@ -43,16 +44,18 @@ impl Semantic {
             };
 
             if let Err(e) = result {
+                if has_no_err {
+                    has_no_err = false;
+                }
                 eprintln!("[SEMANTIC ERROR]: {}", e);
-                has_err = true;
             }
         }
 
         self.exit_scope();
-        return has_err;
+        return has_no_err;
     }
 
-    fn analyze_fn(&mut self, fd: &mut FunctionDef) -> Result<(), String> {
+    fn analyze_fn(&mut self, fd: &'s mut FunctionDef) -> Result<(), String> {
         // local scope
         self.entry_scope();
 
@@ -65,7 +68,7 @@ impl Semantic {
     }
 
     // fd_type: function definition return type
-    fn analyze_stmt(&mut self, stmt: &mut Stmt, fd_type: DataType) -> Result<(), String> {
+    fn analyze_stmt(&mut self, stmt: &'s mut Stmt, fd_type: DataType) -> Result<(), String> {
         match stmt {
             Stmt::Var(stmt) => self.analyze_var(stmt, false)?,
             Stmt::Assign(stmt) => self.analyze_assign(stmt)?,
@@ -83,17 +86,18 @@ impl Semantic {
         Ok(())
     }
 
-    fn analyze_var(&mut self, vs: &mut VarStmt, is_global: bool) -> Result<(), String> {
-        let scope = self.analyze_expr(&mut vs.value)?;
-
-        if vs.data_type != scope.data_type && scope.data_type != DataType::Void {
-            return Err(format!(
-                "incompatible var data type and var expr type: '{:?}' != '{:?}'",
-                vs.data_type, scope.data_type,
-            ));
+    fn analyze_var(&mut self, vs: &'s mut VarStmt, is_global: bool) -> Result<(), String> {
+        if let Some(ref mut value) = vs.value {
+            let scope = self.analyze_expr(value)?;
+            if vs.data_type != scope.data_type && scope.data_type != DataType::Void {
+                return Err(format!(
+                    "incompatible var data type and var expr type: '{:?}' != '{:?}'",
+                    vs.data_type, scope.data_type,
+                ));
+            }
         }
 
-        let id = self.declare(vs.name.clone(), vs.data_type)?;
+        let id = self.declare(vs.name.as_str(), vs.data_type)?;
         vs.id = Some(id);
         vs.is_global = is_global;
         Ok(())
@@ -113,10 +117,16 @@ impl Semantic {
     }
 
     // fd_type: function definition return type
-    fn analyze_if_stmt(&mut self, stmt: &mut IfStmt, fd_type: DataType) -> Result<(), String> {
+    fn analyze_if_stmt(&mut self, stmt: &'s mut IfStmt, fd_type: DataType) -> Result<(), String> {
         for branch in stmt.branches.iter_mut() {
             self.analyze_expr(&mut branch.cond_expr)?;
             for stmt in branch.body.stmts.iter_mut() {
+                self.analyze_stmt(stmt, fd_type)?;
+            }
+        }
+
+        if let Some(else_body) = &mut stmt.else_stmt {
+            for stmt in else_body.stmts.iter_mut() {
                 self.analyze_stmt(stmt, fd_type)?;
             }
         }
@@ -127,6 +137,7 @@ impl Semantic {
     fn analyze_expr(&mut self, expr: &mut Expr) -> Result<ExprData, String> {
         match expr {
             Expr::Int32(_) => Ok(ExprData::new(None, DataType::Int32)),
+            Expr::Float32(_) => Ok(ExprData::new(None, DataType::Float32)),
             Expr::String(_) => Ok(ExprData::new(None, DataType::String)),
             Expr::Bool(_) => Ok(ExprData::new(None, DataType::Bool)),
 
@@ -148,8 +159,6 @@ impl Semantic {
 
                 Ok(ExprData::new(None, result_type))
             }
-            // FIX: remove `Empty` type from Expr and use instead Option<T> where `T` is expr
-            Expr::Empty => Ok(ExprData::new(None, DataType::Void)),
         }
     }
 
@@ -163,13 +172,13 @@ impl Semantic {
         match op {
             // arithmetic
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Modulo => {
-                if lhs == DataType::Int32 && rhs == DataType::Int32 {
-                    Ok(DataType::Int32)
-                } else {
-                    Err(format!(
+                match (lhs, rhs) {
+                    (DataType::Int32, DataType::Int32) => Ok(DataType::Int32),
+                    (DataType::Float32, DataType::Float32) => Ok(DataType::Float32),
+                    _ => Err(format!(
                         "operator {:?} requires both operands to be Int32, found LHS({:?}) and RHS({:?})",
                         op, lhs, rhs
-                    ))
+                    )),
                 }
             }
 
@@ -228,7 +237,7 @@ impl Semantic {
         }
     }
 
-    fn declare(&mut self, name: String, data_type: DataType) -> Result<usize, String> {
+    fn declare(&mut self, name: &'s str, data_type: DataType) -> Result<usize, String> {
         let scope = self.scopes.last_mut().unwrap();
         match scope.entry(name) {
             Entry::Occupied(entry) => Err(format!("redefinition of '{}'", entry.key())),
